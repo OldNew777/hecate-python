@@ -73,7 +73,8 @@ def craw_video(bv: str, output_root_dir: os.path, overwrite=False) -> None:
 
     if not os.path.exists(video_path) or overwrite:
         # download video
-        common.any_download(url=f'https://www.bilibili.com/video/{bv}', output_dir=output_dir, merge=True, info_only=False,
+        common.any_download(url=f'https://www.bilibili.com/video/{bv}', output_dir=output_dir, merge=True,
+                            info_only=False,
                             stream_id='dash-flv360')
         # rename the video file
         video_files = [f for f in os.listdir(output_dir) if f.endswith('.mp4')]
@@ -159,20 +160,55 @@ def search(keyword: str, page: int, pagesize: int = 20, result_type: str = 'vide
     raise ValueError(f'unsupported result_type: {result_type}')
 
 
+def high_quality(video: dict) -> bool:
+    duration = video['duration']
+    n_play = video['play']
+    n_chat = video['video_review']
+    is_pay = video['is_pay']
+    is_union_video = video['is_union_video']
+
+    def duration2seconds(duration: str) -> float:
+        seconds = 0.0
+        time_sections = duration.split(':')
+        time_sections.reverse()
+        for i, time_section in enumerate(time_sections):
+            seconds += float(time_section) * (60 ** i)
+        return seconds
+    duration = duration2seconds(duration)
+
+    duration_valid = 30 <= duration <= 900
+    n_play_valid = n_play >= 10000
+    n_chat_valid = n_chat / duration >= 0.2
+    is_pay_valid = is_pay == 0
+    is_union_video_valid = is_union_video == 0
+
+    return duration_valid
+
+
 def craw_search(keyword: str, num: int, output_root_dir: os.path) -> None:
+    logger.info(f'Searching {keyword} for {num} videos')
+
     n = 0
-    page = 1
+    search_max_limit = 1000
+    page = 0
+    pagesize = 20
     results = []
     while n < num:
+        page += 1
+        if page * pagesize >= search_max_limit:
+            logger.warning(f'Search size limited to {search_max_limit}, only {len(results)} videos found')
+            break
         video_list = search(keyword=keyword, page=page)
         for video in video_list:
             bv = video['bvid']
+            if not high_quality(video):
+                logger.info(f'Video {bv} is not high quality, skip')
+                continue
             craw_video(bv=bv, output_root_dir=output_root_dir)
             results.append(video)
             n += 1
             if n >= num:
                 break
-        page += 1
         with open(os.path.join(output_root_dir, f'{keyword}.json'), 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=4)
 
@@ -181,7 +217,7 @@ if __name__ == '__main__':
     output_root_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dataset')
     check_dir(output_root_dir)
 
-    craw_search(keyword='vlog', num=200, output_root_dir=output_root_dir)
+    craw_search(keyword='vlog', num=50, output_root_dir=output_root_dir)
 
     # bv = 'BV138411L7Ze'
     # craw_video(bv=bv, output_root_dir=output_root_dir)
