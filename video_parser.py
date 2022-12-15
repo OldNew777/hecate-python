@@ -40,6 +40,48 @@ def calc_uniformity(gray, num_bins = 256):
     idx = int(num_bins * 0.05)
     return (sum(sorted[:idx, :]) / sum(sorted)).item()
 
+def calc_hsv_hist(img, nbins = 128):
+    cvt = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+    planes = cv.split(cvt)
+
+    hist0 = cv.calcHist(planes[0:1], [0], None, [nbins], [0, 256])
+    hist1 = cv.calcHist(planes[1:2], [0], None, [nbins], [0, 256])
+    hist2 = cv.calcHist(planes[2:3], [0], None, [nbins], [0, 256])
+
+    cv.normalize(hist0, hist0)
+    cv.normalize(hist1, hist1)
+    cv.normalize(hist2, hist2)
+
+    hist = np.concatenate([hist0, hist1, hist2])
+    return hist
+
+def calc_pyr_color_hist(img, nbins = 128, level = 2):
+    w, h, _ = img.shape
+    npatches = 0
+    for i in range(level):
+        npatches += 4 ** i
+    
+    hist_sz = 3 * nbins
+
+    hist = np.ndarray([hist_sz * npatches, 1], np.float32)
+
+    patch = 0
+    for l in range(level):
+        for x in range(2 ** l):
+            for y in range(2 ** l):
+                p_width = int(np.floor(w / 2 ** l))
+                p_height = int(np.floor(h / 2 ** l))
+                p_x = x * p_width
+                p_y = y * p_height
+                patch_img = img[p_x:p_x + p_width, p_y:p_y + p_height]
+                patch_hist = calc_hsv_hist(patch_img, nbins)
+                hist[hist_sz * patch:hist_sz * patch + hist_sz] = patch_hist
+                patch += 1
+    
+    print(hist)
+    return hist
+
+
 def filter_low_quality(info_list, max_filter_percentage=0.15, threshold=[0.075, 0.08, 0.8]):
     sort_brightness = sorted(info_list, key=lambda item : item["brightness"])
     sort_sharpness = sorted(info_list, key=lambda item : item["sharpness"])
@@ -150,4 +192,5 @@ if __name__ == "__main__":
     filter_low_quality(info_list)
     filter_transition(info_list, frame_list)
     # debug_show_certain_invalid(info_list, "ECR")
-    debug_show_valid(info_list)
+    # debug_show_valid(info_list)
+    calc_pyr_color_hist(frame_list[0])
