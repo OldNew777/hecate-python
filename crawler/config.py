@@ -19,7 +19,7 @@ def get_headers():
     """
     return {
         'User-Agent': random.choice(user_agents),
-        'cookie': "b_ut=5; i-wanna-go-back=-1; buvid3=F7AF42A9-726D-42F7-822A-AF5B06CD3F01167618infoc; b_nut=16322965"
+        'Cookie': "b_ut=5; i-wanna-go-back=-1; buvid3=F7AF42A9-726D-42F7-822A-AF5B06CD3F01167618infoc; b_nut=16322965"
                   "84; fingerprint=bd229a476cee98d9a5b6bdbaf6e154b9; buvid_fp=e9cc9516295e5f45b01714e70529cccf; "
                   "buvid_fp_plain=undefined; CURRENT_BLACKGAP=0; CURRENT_FNVAL=4048; PVID=2; blackside_state=0; "
                   "LIVE_BUVID=AUTO6916378289430118; buvid4=E3D4EF5D-DC34-5068-E6D9-888F5E3B03DB05361-022021913-TTYbA0S"
