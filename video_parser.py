@@ -55,8 +55,42 @@ def calc_hsv_hist(img, nbins = 128):
     hist = np.concatenate([hist0, hist1, hist2])
     return hist
 
+def orientation(gx, gy):
+    alpha = 180.0 / 3.14159265358979323846264338327950288419716939937510
+
+    ori = np.ndarray(gx.shape[0:2], np.float32)
+    for r in range(gx.shape[0]):
+        for c in range(gx.shape[1]):
+            deg = np.arctan2(gy[r, c], gx[r, c]) * alpha
+            deg = deg if deg >= 0 else deg + 360
+            deg = deg if deg < 180 else deg - 180
+            ori[r, c] = deg
+    
+    return ori
+
+def calc_egde_hist_g(gx, gy, nbins_ori = 16, nbins_mag = 16):
+    _range_ori = [0, 180]
+    _range_mag = [0, 256]
+
+    ori = orientation(gx, gy)
+    mag = cv.magnitude(gx, gy)
+
+    hist_ori = cv.calcHist([ori], [0], None, [nbins_ori], _range_ori)
+    hist_mag = cv.calcHist([mag], [0], None, [nbins_mag], _range_mag)
+
+    cv.normalize(hist_ori, hist_ori)
+    cv.normalize(hist_mag, hist_mag)
+
+    return np.concatenate([hist_ori, hist_mag])
+
+def calc_egde_hist(gray, nbins_ori = 16, nbins_mag = 16):
+    gx = cv.Scharr(gray, cv.CV_32F, 1, 0)
+    gy = cv.Scharr(gray, cv.CV_32F, 0, 1)
+
+    return calc_egde_hist_g(gx, gy, nbins_ori, nbins_mag)
+
 def calc_pyr_color_hist(img, nbins = 128, level = 2):
-    w, h, _ = img.shape
+    h, w, _ = img.shape
     npatches = 0
     for i in range(level):
         npatches += 4 ** i
@@ -78,9 +112,58 @@ def calc_pyr_color_hist(img, nbins = 128, level = 2):
                 hist[hist_sz * patch:hist_sz * patch + hist_sz] = patch_hist
                 patch += 1
     
-    print(hist)
     return hist
 
+def calc_pyr_edge_hist(img, nbins_ori = 16, nbins_mag = 16, level = 2):
+    h, w = img.shape # gray
+    npatches = 0
+    for i in range(level):
+        npatches += 4 ** i
+    
+    hist_sz = nbins_ori + nbins_mag
+
+    hist = np.ndarray([hist_sz * npatches, 1], np.float32)
+
+    patch = 0
+    for l in range(level):
+        for x in range(2 ** l):
+            for y in range(2 ** l):
+                p_width = int(np.floor(w / 2 ** l))
+                p_height = int(np.floor(h / 2 ** l))
+                p_x = x * p_width
+                p_y = y * p_height
+                patch_img = img[p_x:p_x + p_width, p_y:p_y + p_height]
+                patch_hist = calc_egde_hist(patch_img, nbins_ori, nbins_mag)
+                hist[hist_sz * patch:hist_sz * patch + hist_sz] = patch_hist
+                patch += 1
+    
+    return hist
+
+def calc_pyr_edge_hist_g(gx, gy, nbins_ori = 16, nbins_mag = 16, level = 2):
+    h, w, _ = gx.shape
+    npatches = 0
+    for i in range(level):
+        npatches += 4 ** i
+    
+    hist_sz = nbins_ori + nbins_mag
+
+    hist = np.ndarray([hist_sz * npatches, 1], np.float32)
+
+    patch = 0
+    for l in range(level):
+        for x in range(2 ** l):
+            for y in range(2 ** l):
+                p_width = int(np.floor(w / 2 ** l))
+                p_height = int(np.floor(h / 2 ** l))
+                p_x = x * p_width
+                p_y = y * p_height
+                patch_gx = gx[p_x:p_x + p_width, p_y:p_y + p_height]
+                patch_gy = gy[p_x:p_x + p_width, p_y:p_y + p_height]
+                patch_hist = calc_egde_hist_g(patch_gx, patch_gy, nbins_ori, nbins_mag)
+                hist[hist_sz * patch:hist_sz * patch + hist_sz] = patch_hist
+                patch += 1
+    
+    return hist
 
 def filter_low_quality(info_list, max_filter_percentage=0.15, threshold=[0.075, 0.08, 0.8]):
     sort_brightness = sorted(info_list, key=lambda item : item["brightness"])
@@ -146,6 +229,26 @@ def filter_transition(info_list, frame_list, max_filter_percentage=0.1, threshol
             sorted_transition[i]["valid"] = False
             sorted_transition[i]["flag"] += "ECR "
 
+def extract_histo_features(frame_list, info_list, pyr_level = 2, omit_filtered = True, nbins_color = 128, 
+                           nbins_edge_ori = 8, nbins_edge_mag = 8):
+    npatches = 0
+    for i in range(pyr_level):
+        npatches += 4 ** i
+    
+    nbins_edge = nbins_edge_mag + nbins_edge_ori
+    color_hist = np.ndarray([npatches * 3 * nbins_color, len(frame_list)], dtype=np.float32)
+    edge_hist = np.ndarray([npatches * nbins_edge, len(frame_list)], dtype=np.float32)
+
+    for i in tqdm(range(len(frame_list))):
+        if omit_filtered and not info_list[i]["valid"]:
+            continue
+        
+        color_hist[:, i] = calc_pyr_color_hist(frame_list[i], nbins_color, pyr_level)[:, 0]
+        edge_hist[:, i] = calc_pyr_edge_hist(to_gray(frame_list[i]), nbins_edge_ori, nbins_edge_mag, pyr_level)[:, 0]
+
+    color_hist = color_hist.T
+    edge_hist = edge_hist.T
+    return np.concatenate([color_hist, edge_hist], axis=1)
 
 def parse_frame_info(frame_list):
     info_list = []
@@ -193,4 +296,5 @@ if __name__ == "__main__":
     filter_transition(info_list, frame_list)
     # debug_show_certain_invalid(info_list, "ECR")
     # debug_show_valid(info_list)
-    calc_pyr_color_hist(frame_list[0])
+    feature = extract_histo_features(frame_list, info_list)
+    print(feature.shape)
