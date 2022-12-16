@@ -7,6 +7,7 @@ from mylogger import logger
 
 def time_it(func):
     def wrapper(*args, **kwargs):
+        logger.info(f'Running {func.__name__}...')
         start = time.time()
         result = func(*args, **kwargs)
         end = time.time()
