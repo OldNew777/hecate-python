@@ -69,7 +69,6 @@ def check_dir(root_dir: os.path, name: str = None) -> os.path:
 def craw_video(bv: str, output_root_dir: os.path, overwrite=False) -> None:
     output_dir = check_dir(output_root_dir, bv)
     video_path = os.path.join(output_dir, f'video.mp4')
-    logger.info(f'Processing {bv}')
 
     if not os.path.exists(video_path) or overwrite:
         # download video
@@ -135,6 +134,8 @@ def download_video_series(series_number: int, output_root_dir: os.path) -> None:
 
 
 def search(keyword: str, page: int, pagesize: int = 20, result_type: str = 'video') -> list:
+    assert pagesize == 20
+
     param = {
         '__refresh__': True,
         '_extra': '',
@@ -148,6 +149,7 @@ def search(keyword: str, page: int, pagesize: int = 20, result_type: str = 'vide
         'search_type': 'video',
         'source_tag': 3,
         'dynamic_offset': 0,
+        'order': 'dm',
     }
     r = requests.get(url='https://api.bilibili.com/x/web-interface/search/all/v2',
                      params=param, headers=config.get_headers())
@@ -176,13 +178,13 @@ def high_quality(video: dict) -> bool:
         return seconds
     duration = duration2seconds(duration)
 
-    duration_valid = 30 <= duration <= 900
+    duration_valid = 30 <= duration <= 180
     n_play_valid = n_play >= 10000
     n_chat_valid = n_chat / duration >= 0.2
     is_pay_valid = is_pay == 0
     is_union_video_valid = is_union_video == 0
 
-    return duration_valid
+    return duration_valid and n_play_valid and n_chat_valid and is_pay_valid and is_union_video_valid
 
 
 def craw_search(keyword: str, num: int, output_root_dir: os.path) -> None:
@@ -202,8 +204,9 @@ def craw_search(keyword: str, num: int, output_root_dir: os.path) -> None:
         for video in video_list:
             bv = video['bvid']
             if not high_quality(video):
-                logger.info(f'Video {bv} is not high quality, skip')
+                logger.info(f'Skip {bv} for low quality')
                 continue
+            logger.info(f'Process {bv}, {n + 1}/{num}')
             craw_video(bv=bv, output_root_dir=output_root_dir)
             results.append(video)
             n += 1
@@ -214,7 +217,7 @@ def craw_search(keyword: str, num: int, output_root_dir: os.path) -> None:
 
 
 if __name__ == '__main__':
-    output_root_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dataset')
+    output_root_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'hecate-dataset')
     check_dir(output_root_dir)
 
     craw_search(keyword='vlog', num=50, output_root_dir=output_root_dir)

@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 from tqdm import tqdm
 
+
 class VideoParser:
     def __init__(self, path):
         self.frame_list = parse_video(path)
@@ -16,6 +17,7 @@ class VideoParser:
         self.feature = extract_histo_features(frame_list, info_list)
         post_process(frame_list, info_list, X_diff)
 
+
 def parse_video(path):
     video = cv.VideoCapture(path)
     if not video.isOpened():
@@ -29,16 +31,19 @@ def parse_video(path):
     video.release()
     return frame_list
 
+
 def to_gray(bgr):
     gray = cv.cvtColor(bgr, cv.COLOR_BGR2GRAY)
     gray = cv.GaussianBlur(gray, (3, 3), 0)
     return gray
+
 
 def calc_brightness(bgr):
     illu = 0.2126 * bgr[:, :, 2] + 0.7152 * bgr[:, :, 1] + 0.0722 * bgr[:, :, 0]
     illu /= 255
     illu = np.mean(illu)
     return illu
+
 
 def calc_sharpness(gray):
     g = gray / 255.
@@ -48,13 +53,15 @@ def calc_sharpness(gray):
     sharp = np.mean(sharp)
     return sharp
 
-def calc_uniformity(gray, num_bins = 256):
+
+def calc_uniformity(gray, num_bins=256):
     hist = cv.calcHist([gray], [0], None, [num_bins], [0, 256])
     sorted = np.sort(hist, axis=0)[::-1, :]
     idx = int(num_bins * 0.05)
     return (sum(sorted[:idx, :]) / sum(sorted)).item()
 
-def calc_hsv_hist(img, nbins = 128):
+
+def calc_hsv_hist(img, nbins=128):
     cvt = cv.cvtColor(img, cv.COLOR_BGR2HSV)
     planes = cv.split(cvt)
 
@@ -69,6 +76,7 @@ def calc_hsv_hist(img, nbins = 128):
     hist = np.concatenate([hist0, hist1, hist2])
     return hist
 
+
 def orientation(gx, gy):
     alpha = 180.0 / 3.14159265358979323846264338327950288419716939937510
 
@@ -79,10 +87,11 @@ def orientation(gx, gy):
             deg = deg if deg >= 0 else deg + 360
             deg = deg if deg < 180 else deg - 180
             ori[r, c] = deg
-    
+
     return ori
 
-def calc_egde_hist_g(gx, gy, nbins_ori = 16, nbins_mag = 16):
+
+def calc_egde_hist_g(gx, gy, nbins_ori=16, nbins_mag=16):
     _range_ori = [0, 180]
     _range_mag = [0, 256]
 
@@ -97,18 +106,20 @@ def calc_egde_hist_g(gx, gy, nbins_ori = 16, nbins_mag = 16):
 
     return np.concatenate([hist_ori, hist_mag])
 
-def calc_egde_hist(gray, nbins_ori = 16, nbins_mag = 16):
+
+def calc_egde_hist(gray, nbins_ori=16, nbins_mag=16):
     gx = cv.Scharr(gray, cv.CV_32F, 1, 0)
     gy = cv.Scharr(gray, cv.CV_32F, 0, 1)
 
     return calc_egde_hist_g(gx, gy, nbins_ori, nbins_mag)
 
-def calc_pyr_color_hist(img, nbins = 128, level = 2):
+
+def calc_pyr_color_hist(img, nbins=128, level=2):
     h, w, _ = img.shape
     npatches = 0
     for i in range(level):
         npatches += 4 ** i
-    
+
     hist_sz = 3 * nbins
 
     hist = np.ndarray([hist_sz * npatches, 1], np.float32)
@@ -125,15 +136,16 @@ def calc_pyr_color_hist(img, nbins = 128, level = 2):
                 patch_hist = calc_hsv_hist(patch_img, nbins)
                 hist[hist_sz * patch:hist_sz * patch + hist_sz] = patch_hist
                 patch += 1
-    
+
     return hist
 
-def calc_pyr_edge_hist(img, nbins_ori = 16, nbins_mag = 16, level = 2):
-    h, w = img.shape # gray
+
+def calc_pyr_edge_hist(img, nbins_ori=16, nbins_mag=16, level=2):
+    h, w = img.shape  # gray
     npatches = 0
     for i in range(level):
         npatches += 4 ** i
-    
+
     hist_sz = nbins_ori + nbins_mag
 
     hist = np.ndarray([hist_sz * npatches, 1], np.float32)
@@ -150,15 +162,16 @@ def calc_pyr_edge_hist(img, nbins_ori = 16, nbins_mag = 16, level = 2):
                 patch_hist = calc_egde_hist(patch_img, nbins_ori, nbins_mag)
                 hist[hist_sz * patch:hist_sz * patch + hist_sz] = patch_hist
                 patch += 1
-    
+
     return hist
 
-def calc_pyr_edge_hist_g(gx, gy, nbins_ori = 16, nbins_mag = 16, level = 2):
+
+def calc_pyr_edge_hist_g(gx, gy, nbins_ori=16, nbins_mag=16, level=2):
     h, w, _ = gx.shape
     npatches = 0
     for i in range(level):
         npatches += 4 ** i
-    
+
     hist_sz = nbins_ori + nbins_mag
 
     hist = np.ndarray([hist_sz * npatches, 1], np.float32)
@@ -176,13 +189,14 @@ def calc_pyr_edge_hist_g(gx, gy, nbins_ori = 16, nbins_mag = 16, level = 2):
                 patch_hist = calc_egde_hist_g(patch_gx, patch_gy, nbins_ori, nbins_mag)
                 hist[hist_sz * patch:hist_sz * patch + hist_sz] = patch_hist
                 patch += 1
-    
+
     return hist
 
+
 def filter_low_quality(info_list, max_filter_percentage=0.15, threshold=[0.075, 0.08, 0.8]):
-    sort_brightness = sorted(info_list, key=lambda item : item["brightness"])
-    sort_sharpness = sorted(info_list, key=lambda item : item["sharpness"])
-    sort_uniformity = sorted(info_list, key=lambda item : -item["uniformity"]) # max to min
+    sort_brightness = sorted(info_list, key=lambda item: item["brightness"])
+    sort_sharpness = sorted(info_list, key=lambda item: item["sharpness"])
+    sort_uniformity = sorted(info_list, key=lambda item: -item["uniformity"])  # max to min
     for i in range(int(len(info_list) * max_filter_percentage)):
         if sort_brightness[i]["brightness"] < threshold[0]:
             sort_brightness[i]["valid"] = False
@@ -194,7 +208,8 @@ def filter_low_quality(info_list, max_filter_percentage=0.15, threshold=[0.075, 
             sort_uniformity[i]["valid"] = False
             sort_uniformity[i]["flag"] += "UNIFORM "
 
-def filter_transition(info_list, frame_list, max_filter_percentage=0.1, threshold=[0.5, 0,1]):
+
+def filter_transition(info_list, frame_list, max_filter_percentage=0.1, threshold=[0.5, 0, 1]):
     img_size = frame_list[0].shape[0] * frame_list[0].shape[1]
 
     # compute the first-order derivative frame-by-frame difference
@@ -224,20 +239,20 @@ def filter_transition(info_list, frame_list, max_filter_percentage=0.1, threshol
     # Transition detection using ECR (edge change ratio)
     v_ecr = []
     for i in range(len(frame_list)):
-        rho_out = 1 - min(1, sum(sum(v_edge[i-1] * v_edge_dl[i]))) /  max(1e-6, sum(sum(v_edge[i-1])))
-        rho_in = 1 - min(1, sum(sum(v_edge_dl[i-1] * v_edge[i]))) /  max(1e-6, sum(sum(v_edge[i-1])))
+        rho_out = 1 - min(1, sum(sum(v_edge[i - 1] * v_edge_dl[i]))) / max(1e-6, sum(sum(v_edge[i - 1])))
+        rho_in = 1 - min(1, sum(sum(v_edge_dl[i - 1] * v_edge[i]))) / max(1e-6, sum(sum(v_edge[i - 1])))
 
         v_ecr.append(max(rho_out, rho_in))
 
     # CUT detection
-    sorted_cut = sorted(info_list, key=lambda item : -v_diff[item["id"]])
+    sorted_cut = sorted(info_list, key=lambda item: -v_diff[item["id"]])
     for i in range(int(len(info_list) * max_filter_percentage)):
         if v_diff[sorted_cut[i]["id"]] >= threshold[0]:
             sorted_cut[i]["valid"] = False
             sorted_cut[i]["flag"] += "CUT "
 
     # TRANSITION detection (cut, fade, dissolve, wipe)
-    sorted_transition = sorted(info_list, key=lambda item : v_ecr[item["id"]])
+    sorted_transition = sorted(info_list, key=lambda item: v_ecr[item["id"]])
     for i in range(int(len(info_list) * max_filter_percentage)):
         if v_ecr[sorted_transition[i]["id"]] >= threshold[1]:
             sorted_transition[i]["valid"] = False
@@ -245,12 +260,13 @@ def filter_transition(info_list, frame_list, max_filter_percentage=0.1, threshol
 
     return v_diff, v_ecr
 
-def extract_histo_features(frame_list, info_list, pyr_level = 2, omit_filtered = True, nbins_color = 128, 
-                           nbins_edge_ori = 8, nbins_edge_mag = 8):
+
+def extract_histo_features(frame_list, info_list, pyr_level=2, omit_filtered=True, nbins_color=128,
+                           nbins_edge_ori=8, nbins_edge_mag=8):
     npatches = 0
     for i in range(pyr_level):
         npatches += 4 ** i
-    
+
     nbins_edge = nbins_edge_mag + nbins_edge_ori
     color_hist = np.ndarray([npatches * 3 * nbins_color, len(frame_list)], dtype=np.float32)
     edge_hist = np.ndarray([npatches * nbins_edge, len(frame_list)], dtype=np.float32)
@@ -258,7 +274,7 @@ def extract_histo_features(frame_list, info_list, pyr_level = 2, omit_filtered =
     for i in tqdm(range(len(frame_list))):
         if omit_filtered and not info_list[i]["valid"]:
             continue
-        
+
         color_hist[:, i] = calc_pyr_color_hist(frame_list[i], nbins_color, pyr_level)[:, 0]
         edge_hist[:, i] = calc_pyr_edge_hist(to_gray(frame_list[i]), nbins_edge_ori, nbins_edge_mag, pyr_level)[:, 0]
 
@@ -266,7 +282,8 @@ def extract_histo_features(frame_list, info_list, pyr_level = 2, omit_filtered =
     edge_hist = edge_hist.T
     return np.concatenate([color_hist, edge_hist], axis=1)
 
-def post_process(frame_list, info_list, X_diff, min_shot_len = 40): # no gfl
+
+def post_process(frame_list, info_list, X_diff, min_shot_len=40):  # no gfl
     start_idx = -1
     end_idx = -1
     shotlen = -1
@@ -290,6 +307,7 @@ def post_process(frame_list, info_list, X_diff, min_shot_len = 40): # no gfl
             start_idx = -1
             end_idx = -1
 
+
 def sbd_heuristic(v_diff, njumps, min_shot_len):
     jump = []
     sorted_v_idx = [i for i in range(len(v_diff))]
@@ -312,6 +330,7 @@ def sbd_heuristic(v_diff, njumps, min_shot_len):
             break
     return jump
 
+
 def update_shot_range(frame_list, info_list, min_shot_len):
     ranges = []
     sb0 = sb1 = -1
@@ -332,30 +351,33 @@ def update_shot_range(frame_list, info_list, min_shot_len):
             sb0 = sb1 = -1
     return ranges
 
+
 def parse_frame_info(frame_list):
     info_list = []
     for idx, bgr in enumerate(tqdm(frame_list)):
         gray = to_gray(bgr)
 
         info = {
-            "id" : idx,
-            "brightness" : calc_brightness(bgr),
-            "sharpness" : calc_sharpness(gray),
-            "uniformity" : calc_uniformity(gray),
-            "valid" : True,
+            "id": idx,
+            "brightness": calc_brightness(bgr),
+            "sharpness": calc_sharpness(gray),
+            "uniformity": calc_uniformity(gray),
+            "valid": True,
             "flag": "",
         }
         # print(info)
 
         info_list.append(info)
     return info_list
-        
+
+
 def debug_show_invalid(info_list):
     for item in info_list:
         if not item["valid"]:
             print(item)
             cv.imshow("2", frame_list[item["id"]])
             cv.waitKey()
+
 
 def debug_show_certain_invalid(info_list, key):
     for item in info_list:
@@ -364,12 +386,14 @@ def debug_show_certain_invalid(info_list, key):
             cv.imshow("2", frame_list[item["id"]])
             cv.waitKey()
 
+
 def debug_show_valid(info_list):
     for item in info_list:
         if item["valid"]:
             print(item)
             cv.imshow("2", frame_list[item["id"]])
             cv.waitKey()
+
 
 if __name__ == "__main__":
     frame_list = parse_video("video.mp4")
