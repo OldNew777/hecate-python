@@ -1,6 +1,7 @@
 import os.path
 import sys
 import config
+import func
 import video_parser
 import thumnail_extraction
 from mylogger import logger
@@ -11,6 +12,7 @@ if __name__ == '__main__':
     opt = config.HecateParams(args)
     logger.info(f'Hecate parameters: {opt}')
 
+    logger.info('Load video frames')
     frame_list = parse_video(opt.in_video)
 
     logger.info('Parse frames info')

@@ -1,6 +1,18 @@
 import cv2
 import numpy as np
 from typing import Tuple
+import time
+from mylogger import logger
+
+
+def time_it(func):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        logger.info(f"Time taken by {func.__name__} is {end - start} seconds")
+        return result
+    return wrapper
 
 
 def reorder(sorted_l: list, index_map: list) -> list:

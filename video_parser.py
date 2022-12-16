@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 from tqdm import tqdm
 
+import func
 from mylogger import logger
 
 
@@ -19,7 +20,48 @@ from mylogger import logger
 #         self.feature = extract_histo_features(self.frame_list, self.info_list)
 #         post_process(self.frame_list, self.info_list, self.X_diff)
 
+class Range:
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+        self.v_idx = []
 
+    def length(self):
+        return len(self)
+
+    def __len__(self):
+        return self.end - self.start + 1
+
+    def _to_string(self):
+        text_list = [f'[{self.start}, {self.end}] size={len(self)}']
+        if len(self.v_idx) > 0:
+            text_list.append(f' v_idx={self.v_idx}')
+        return ''.join(text_list)
+
+    def __str__(self):
+        return 'Range ' + self._to_string()
+
+    def __repr__(self):
+        return self.__str__()
+
+
+class ShotRange(Range):
+    def __init__(self, start, end):
+        super().__init__(start, end)
+        self.v_range = []
+
+    def __str__(self):
+        text_list = ['ShotRange ', self._to_string()]
+        for subrange in self.v_range:
+            text_list.append(f' Sub-')
+            text_list.append(str(subrange))
+        return ''.join(text_list)
+
+    def __repr__(self):
+        return self.__str__()
+
+
+@func.time_it
 def parse_video(path):
     video = cv.VideoCapture(path)
     if not video.isOpened():
@@ -195,6 +237,7 @@ def calc_pyr_edge_hist_g(gx, gy, nbins_ori=16, nbins_mag=16, level=2):
     return hist
 
 
+@func.time_it
 def filter_low_quality(info_list, max_filter_percentage=0.15, threshold=[0.075, 0.08, 0.8]):
     sort_brightness = sorted(info_list, key=lambda item: item["brightness"])
     sort_sharpness = sorted(info_list, key=lambda item: item["sharpness"])
@@ -211,6 +254,7 @@ def filter_low_quality(info_list, max_filter_percentage=0.15, threshold=[0.075, 
             sort_uniformity[i]["flag"] += "UNIFORM "
 
 
+@func.time_it
 def filter_transition(info_list, frame_list, max_filter_percentage=0.1, threshold=[0.5, 0, 1]):
     img_size = frame_list[0].shape[0] * frame_list[0].shape[1]
 
@@ -263,6 +307,7 @@ def filter_transition(info_list, frame_list, max_filter_percentage=0.1, threshol
     return v_diff, v_ecr
 
 
+@func.time_it
 def extract_histo_features(frame_list, info_list, pyr_level=2, omit_filtered=True, nbins_color=128,
                            nbins_edge_ori=8, nbins_edge_mag=8):
     npatches = 0
@@ -285,6 +330,7 @@ def extract_histo_features(frame_list, info_list, pyr_level=2, omit_filtered=Tru
     return np.concatenate([color_hist, edge_hist], axis=1)
 
 
+@func.time_it
 def post_process(frame_list, info_list, X_diff, min_shot_len=40):  # no gfl
     start_idx = -1
     end_idx = -1
@@ -345,7 +391,7 @@ def update_shot_range(frame_list, info_list, min_shot_len):
         if sb0 >= 0 and sb1 >= 0 and (not info_list[i]["valid"] or i + 1 == len(frame_list)):
             logger.debug(f'{sb0} {sb1}')
             if sb1 - sb0 + 1 > min_shot_len:
-                ranges.append((sb0, sb1))
+                ranges.append(ShotRange(sb0, sb1))
             else:
                 for j in range(sb0, sb1 + 1):
                     info_list[j]["valid"] = False
@@ -354,6 +400,7 @@ def update_shot_range(frame_list, info_list, min_shot_len):
     return ranges
 
 
+@func.time_it
 def parse_frame_info(frame_list):
     info_list = []
     for idx, bgr in enumerate(tqdm(frame_list)):
