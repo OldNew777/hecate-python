@@ -87,3 +87,7 @@ def detect_thumbnail_frames(opt, meta, v_shot_range,
         v_thumb_idx[i] *= opt.step_sz
 
     return v_thumb_idx
+
+
+def generate_thumbnails(opt, v_thumb_idx: list) -> None:
+    pass
