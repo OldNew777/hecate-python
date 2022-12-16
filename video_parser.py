@@ -2,7 +2,6 @@ import cv2 as cv
 import numpy as np
 from tqdm import tqdm
 
-
 class VideoParser:
     def __init__(self, path):
         self.frame_list = parse_video(path)
@@ -17,6 +16,19 @@ class VideoParser:
         self.feature = extract_histo_features(frame_list, info_list)
         post_process(frame_list, info_list, X_diff)
 
+class Range:
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+        self.v_idx = []
+
+    def length(self):
+        return self.end - self.start + 1
+
+class ShotRange(Range):
+    def __init__(self, start, end):
+        super().__init__(start, end)
+        self.v_range = []
 
 def parse_video(path):
     video = cv.VideoCapture(path)
