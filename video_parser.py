@@ -355,7 +355,7 @@ def update_shot_range(frame_list, info_list, min_shot_len):
         if sb0 >= 0 and sb1 >= 0 and (not info_list[i]["valid"] or i + 1 == len(frame_list)):
             print(sb0, sb1)
             if sb1 - sb0 + 1 > min_shot_len:
-                ranges.append((sb0, sb1))
+                ranges.append(ShotRange(sb0, sb1))
             else:
                 for j in range(sb0, sb1 + 1):
                     info_list[j]["valid"] = False
