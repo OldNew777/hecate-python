@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 from tqdm import tqdm
 
+import config
 import func
 from mylogger import logger
 
@@ -232,15 +233,18 @@ def sbd_heuristic(v_diff, njumps, min_shot_len):
 
 class VideoParser:
     def __init__(self):
+        self.opt = None
         self.frame_list = None
         self.info_list = None
         self.ranges = None
         self.feature = None
         self.X_ecr = None
         self.X_diff = None
+        self.meta = None
 
-    def parse_video(self, path):
-        self.init(path)
+    def parse_video(self, opt: config.HecateParams):
+        self.opt = opt
+        self.init(opt.in_video)
         self.parse_frame_info()
         self.filter_low_quality()
         self.filter_transition()
@@ -255,17 +259,29 @@ class VideoParser:
         video = cv.VideoCapture(path)
         if not video.isOpened():
             return None
-        frame_list = []
+
+        logger.info(f'OpenCV version: {cv.__version__}')
+        (major_ver, minor_ver, subminor_ver) = (cv.__version__).split('.')
+        if int(major_ver) < 3:
+            nframes = video.get(cv.cv.CV_CAP_PROP_FRAME_COUNT)
+            fps = video.get(cv.cv.CV_CAP_PROP_FPS)
+            width = int(video.get(cv.cv.CAP_PROP_FRAME_WIDTH))
+            height = int(video.get(cv.cv.CAP_PROP_FRAME_HEIGHT))
+        else:
+            nframes = int(video.get(cv.CAP_PROP_FRAME_COUNT))
+            fps = video.get(cv.CAP_PROP_FPS)
+            width = int(video.get(cv.CAP_PROP_FRAME_WIDTH))
+            height = int(video.get(cv.CAP_PROP_FRAME_HEIGHT))
+        self.meta = config.VideoMetadata(width=width, height=height, fps=fps, nframes=nframes)
+        logger.info(f'Video metadata: {self.meta}')
+
+        self.frame_list = []
         while True:
             ret, frame = video.read()
             if not ret:
                 break
-            frame_list.append(frame)
+            self.frame_list.append(frame)
         video.release()
-
-        self.frame_list = frame_list
-        # logger.debug(len(self.frame_list))
-        return frame_list
 
     @func.time_it
     def filter_low_quality(self, max_filter_percentage=0.15, threshold=[0.075, 0.08, 0.8]):

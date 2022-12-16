@@ -13,6 +13,9 @@ if __name__ == '__main__':
     logger.info(f'Hecate parameters: {opt}')
 
     parser = VideoParser()
-    ranges = parser.parse_video(opt.in_video)
+    v_shot_range = parser.parse_video(opt)
 
-    logger.debug(f'ranges: {ranges}')
+    logger.debug(f'v_shot_range: {v_shot_range}')
+
+    # thumnail_extraction.detect_thumbnail_frames(
+    #     opt=opt, meta=parser.meta, v_shot_range=v_shot_range, X=parser.X_ecr, diff=parser.X_diff)

@@ -26,11 +26,20 @@ class HecateParams:
     def __str__(self):
         return str(self.__dict__)
 
+    def __repr__(self):
+        return self.__str__()
+
 
 class VideoMetadata:
-    def __init__(self, nframes: int, width: int, height: int, duration: float, fps: float):
-        self.nframes = nframes
+    def __init__(self, width: int, height: int, fps: float, nframes: int):
         self.width = width
         self.height = height
-        self.duration = duration
         self.fps = fps
+        self.nframes = nframes
+        self.duration = nframes / fps
+
+    def __str__(self):
+        return str(self.__dict__)
+
+    def __repr__(self):
+        return self.__str__()

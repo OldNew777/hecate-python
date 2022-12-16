@@ -6,6 +6,7 @@ import func
 import config
 
 
+@func.time_it
 def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata, v_shot_range: list,
                             X: np.ndarray, diff: np.ndarray) -> list:
     v_thumb_idx = []
