@@ -462,7 +462,7 @@ class VideoParser:
         for item in info_list:
             if not item["valid"]:
                 logger.debug(item)
-                cv.imshow("2", frame_list[item["id"]])
+                cv.imshow(f"Invalid {item['id']}", frame_list[item["id"]])
                 cv.waitKey()
 
     def debug_show_certain_invalid(self, key):
@@ -471,7 +471,7 @@ class VideoParser:
         for item in info_list:
             if not item["valid"] and key in item["flag"]:
                 logger.debug(item)
-                cv.imshow("2", frame_list[item["id"]])
+                cv.imshow(f"Invalid {item['id']}", frame_list[item["id"]])
                 cv.waitKey()
 
     def debug_show_valid(self):
@@ -480,6 +480,6 @@ class VideoParser:
         for item in info_list:
             if item["valid"]:
                 logger.debug(item)
-                cv.imshow("2", frame_list[item["id"]])
+                cv.imshow(f"Valid {item['id']}", frame_list[item["id"]])
                 cv.waitKey()
 
