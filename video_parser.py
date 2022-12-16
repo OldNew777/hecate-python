@@ -2,20 +2,6 @@ import cv2 as cv
 import numpy as np
 from tqdm import tqdm
 
-class VideoParser:
-    def __init__(self, path):
-        self.frame_list = parse_video(path)
-        self.info_list = parse_frame_info(self.frame_list)
-        self.X_diff = None
-        self.X_ecr = None
-        self.feature = None
-
-    def filter(self):
-        filter_low_quality(self.info_list)
-        self.X_diff, self.X_ecr = filter_transition(info_list, frame_list)
-        self.feature = extract_histo_features(frame_list, info_list)
-        post_process(frame_list, info_list, X_diff)
-
 class Range:
     def __init__(self, start, end):
         self.start = start
@@ -25,24 +11,16 @@ class Range:
     def length(self):
         return self.end - self.start + 1
 
+    def __repr__(self):
+        return f"({self.start}:{self.end})"
+
 class ShotRange(Range):
     def __init__(self, start, end):
         super().__init__(start, end)
         self.v_range = []
 
-def parse_video(path):
-    video = cv.VideoCapture(path)
-    if not video.isOpened():
-        return None
-    frame_list = []
-    while True:
-        ret, frame = video.read()
-        if not ret:
-            break
-        frame_list.append(frame)
-    video.release()
-    return frame_list
-
+    def __repr__(self):
+        return super().__repr__()
 
 def to_gray(bgr):
     gray = cv.cvtColor(bgr, cv.COLOR_BGR2GRAY)
@@ -204,120 +182,244 @@ def calc_pyr_edge_hist_g(gx, gy, nbins_ori=16, nbins_mag=16, level=2):
 
     return hist
 
+class VideoParser:
+    def __init__(self):
+        pass
 
-def filter_low_quality(info_list, max_filter_percentage=0.15, threshold=[0.075, 0.08, 0.8]):
-    sort_brightness = sorted(info_list, key=lambda item: item["brightness"])
-    sort_sharpness = sorted(info_list, key=lambda item: item["sharpness"])
-    sort_uniformity = sorted(info_list, key=lambda item: -item["uniformity"])  # max to min
-    for i in range(int(len(info_list) * max_filter_percentage)):
-        if sort_brightness[i]["brightness"] < threshold[0]:
-            sort_brightness[i]["valid"] = False
-            sort_brightness[i]["flag"] += "DARK "
-        if sort_sharpness[i]["sharpness"] < threshold[1]:
-            sort_sharpness[i]["valid"] = False
-            sort_sharpness[i]["flag"] += "BLUR "
-        if sort_uniformity[i]["uniformity"] > threshold[2]:
-            sort_uniformity[i]["valid"] = False
-            sort_uniformity[i]["flag"] += "UNIFORM "
+    def parse_video(self, path):
+        self.init(path)
+        self.parse_frame_info()
+        self.filter_low_quality()
+        self.filter_transition()
+        # self.extract_histo_features()
+        self.post_process()
+        self.update_shot_range(40)
 
+        return self.ranges
 
-def filter_transition(info_list, frame_list, max_filter_percentage=0.1, threshold=[0.5, 0, 1]):
-    img_size = frame_list[0].shape[0] * frame_list[0].shape[1]
+    def get_frame_features(self):
+        return self.feature
 
-    # compute the first-order derivative frame-by-frame difference
-    v_diff = [0]
-    for i in range(1, len(frame_list) - 1):
-        v_diff.append(
-            (cv.norm(frame_list[i] - frame_list[i - 1]) + cv.norm(frame_list[i + 1] - frame_list[i]))
-            / (2. * img_size)
-        )
-    v_diff.append(0)
+    def get_frame_diff_features(self):
+        return self.X_diff
 
-    # compute edge-change-ratio (ECR)
-    dl_sz = 5
-    dl_elm = cv.getStructuringElement(cv.MORPH_CROSS, (2 * dl_sz + 1, 2 * dl_sz + 1), (dl_sz, dl_sz))
+    def init(self, path):
+        video = cv.VideoCapture(path)
+        if not video.isOpened():
+            return None
+        frame_list = []
+        while True:
+            ret, frame = video.read()
+            if not ret:
+                break
+            frame_list.append(frame)
+        video.release()
 
-    # Pre-compute edge & edge dilation
-    v_edge = []
-    v_edge_dl = []
-    for i in range(len(frame_list)):
-        gray = to_gray(frame_list[i])
-        theta = cv.threshold(gray, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)[0]
-        v_edge.append(cv.Canny(gray, theta, 1.2 * theta))
-        v_edge_dl.append(cv.dilate(v_edge[i], dl_elm))
-        v_edge[i] -= 254
-        v_edge_dl[i] -= 254
+        self.frame_list = frame_list
+        # print(len(self.frame_list))
+        return frame_list
 
-    # Transition detection using ECR (edge change ratio)
-    v_ecr = []
-    for i in range(len(frame_list)):
-        rho_out = 1 - min(1, sum(sum(v_edge[i - 1] * v_edge_dl[i]))) / max(1e-6, sum(sum(v_edge[i - 1])))
-        rho_in = 1 - min(1, sum(sum(v_edge_dl[i - 1] * v_edge[i]))) / max(1e-6, sum(sum(v_edge[i - 1])))
-
-        v_ecr.append(max(rho_out, rho_in))
-
-    # CUT detection
-    sorted_cut = sorted(info_list, key=lambda item: -v_diff[item["id"]])
-    for i in range(int(len(info_list) * max_filter_percentage)):
-        if v_diff[sorted_cut[i]["id"]] >= threshold[0]:
-            sorted_cut[i]["valid"] = False
-            sorted_cut[i]["flag"] += "CUT "
-
-    # TRANSITION detection (cut, fade, dissolve, wipe)
-    sorted_transition = sorted(info_list, key=lambda item: v_ecr[item["id"]])
-    for i in range(int(len(info_list) * max_filter_percentage)):
-        if v_ecr[sorted_transition[i]["id"]] >= threshold[1]:
-            sorted_transition[i]["valid"] = False
-            sorted_transition[i]["flag"] += "ECR "
-
-    return v_diff, v_ecr
+    def filter_low_quality(self, max_filter_percentage=0.15, threshold=[0.075, 0.08, 0.8]):
+        info_list = self.info_list
+        sort_brightness = sorted(info_list, key=lambda item: item["brightness"])
+        sort_sharpness = sorted(info_list, key=lambda item: item["sharpness"])
+        sort_uniformity = sorted(info_list, key=lambda item: -item["uniformity"])  # max to min
+        for i in range(int(len(info_list) * max_filter_percentage)):
+            if sort_brightness[i]["brightness"] < threshold[0]:
+                sort_brightness[i]["valid"] = False
+                sort_brightness[i]["flag"] += "DARK "
+            if sort_sharpness[i]["sharpness"] < threshold[1]:
+                sort_sharpness[i]["valid"] = False
+                sort_sharpness[i]["flag"] += "BLUR "
+            if sort_uniformity[i]["uniformity"] > threshold[2]:
+                sort_uniformity[i]["valid"] = False
+                sort_uniformity[i]["flag"] += "UNIFORM "
 
 
-def extract_histo_features(frame_list, info_list, pyr_level=2, omit_filtered=True, nbins_color=128,
-                           nbins_edge_ori=8, nbins_edge_mag=8):
-    npatches = 0
-    for i in range(pyr_level):
-        npatches += 4 ** i
+    def filter_transition(self, max_filter_percentage=0.1, threshold=[0.5, 0, 1]):
+        info_list = self.info_list
+        frame_list = self.frame_list
+        img_size = frame_list[0].shape[0] * frame_list[0].shape[1]
 
-    nbins_edge = nbins_edge_mag + nbins_edge_ori
-    color_hist = np.ndarray([npatches * 3 * nbins_color, len(frame_list)], dtype=np.float32)
-    edge_hist = np.ndarray([npatches * nbins_edge, len(frame_list)], dtype=np.float32)
+        # compute the first-order derivative frame-by-frame difference
+        v_diff = [0]
+        for i in range(1, len(frame_list) - 1):
+            v_diff.append(
+                (cv.norm(frame_list[i] - frame_list[i - 1]) + cv.norm(frame_list[i + 1] - frame_list[i]))
+                / (2. * img_size)
+            )
+        v_diff.append(0)
 
-    for i in tqdm(range(len(frame_list))):
-        if omit_filtered and not info_list[i]["valid"]:
-            continue
+        # compute edge-change-ratio (ECR)
+        dl_sz = 5
+        dl_elm = cv.getStructuringElement(cv.MORPH_CROSS, (2 * dl_sz + 1, 2 * dl_sz + 1), (dl_sz, dl_sz))
 
-        color_hist[:, i] = calc_pyr_color_hist(frame_list[i], nbins_color, pyr_level)[:, 0]
-        edge_hist[:, i] = calc_pyr_edge_hist(to_gray(frame_list[i]), nbins_edge_ori, nbins_edge_mag, pyr_level)[:, 0]
+        # Pre-compute edge & edge dilation
+        v_edge = []
+        v_edge_dl = []
+        for i in range(len(frame_list)):
+            gray = to_gray(frame_list[i])
+            theta = cv.threshold(gray, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)[0]
+            v_edge.append(cv.Canny(gray, theta, 1.2 * theta))
+            v_edge_dl.append(cv.dilate(v_edge[i], dl_elm))
+            v_edge[i] -= 254
+            v_edge_dl[i] -= 254
 
-    color_hist = color_hist.T
-    edge_hist = edge_hist.T
-    return np.concatenate([color_hist, edge_hist], axis=1)
+        # Transition detection using ECR (edge change ratio)
+        v_ecr = []
+        for i in range(len(frame_list)):
+            rho_out = 1 - min(1, sum(sum(v_edge[i - 1] * v_edge_dl[i]))) / max(1e-6, sum(sum(v_edge[i - 1])))
+            rho_in = 1 - min(1, sum(sum(v_edge_dl[i - 1] * v_edge[i]))) / max(1e-6, sum(sum(v_edge[i - 1])))
+
+            v_ecr.append(max(rho_out, rho_in))
+
+        # CUT detection
+        sorted_cut = sorted(info_list, key=lambda item: -v_diff[item["id"]])
+        for i in range(int(len(info_list) * max_filter_percentage)):
+            if v_diff[sorted_cut[i]["id"]] >= threshold[0]:
+                sorted_cut[i]["valid"] = False
+                sorted_cut[i]["flag"] += "CUT "
+
+        # TRANSITION detection (cut, fade, dissolve, wipe)
+        sorted_transition = sorted(info_list, key=lambda item: v_ecr[item["id"]])
+        for i in range(int(len(info_list) * max_filter_percentage)):
+            if v_ecr[sorted_transition[i]["id"]] >= threshold[1]:
+                sorted_transition[i]["valid"] = False
+                sorted_transition[i]["flag"] += "ECR "
+
+        self.X_diff = v_diff
+        self.X_ecr = v_ecr
+        return v_diff, v_ecr
 
 
-def post_process(frame_list, info_list, X_diff, min_shot_len=40):  # no gfl
-    start_idx = -1
-    end_idx = -1
-    shotlen = -1
-    max_shot_len = min_shot_len * 3
+    def extract_histo_features(self, pyr_level=2, omit_filtered=True, nbins_color=128,
+                            nbins_edge_ori=8, nbins_edge_mag=8):
+        frame_list = self.frame_list
+        info_list = self.info_list
+        npatches = 0
+        for i in range(pyr_level):
+            npatches += 4 ** i
 
-    for i in tqdm(range(len(frame_list))):
-        if start_idx < 0 and info_list[i]["valid"]:
-            start_idx = i
-        if start_idx >= 0 and (not info_list[i]["valid"] or i + 1 == len(frame_list)):
-            end_idx = i
-            shotlen = end_idx - start_idx + 1
-            if shotlen >= max_shot_len:
-                njumps = int(np.floor(shotlen / min_shot_len))
-                v_diff = X_diff[start_idx:end_idx + 1]
-                jump = sbd_heuristic(v_diff, njumps, min_shot_len)
-                print(start_idx, end_idx, jump)
-                for k in range(len(jump)):
-                    info_list[start_idx + jump[k] - 1]["valid"] = False
-                    info_list[start_idx + jump[k] - 1]["flag"] += "[GFL] "
+        nbins_edge = nbins_edge_mag + nbins_edge_ori
+        color_hist = np.ndarray([npatches * 3 * nbins_color, len(frame_list)], dtype=np.float32)
+        edge_hist = np.ndarray([npatches * nbins_edge, len(frame_list)], dtype=np.float32)
 
-            start_idx = -1
-            end_idx = -1
+        for i in tqdm(range(len(frame_list)), desc="Extracting histo features"):
+            if omit_filtered and not info_list[i]["valid"]:
+                continue
+
+            color_hist[:, i] = calc_pyr_color_hist(frame_list[i], nbins_color, pyr_level)[:, 0]
+            edge_hist[:, i] = calc_pyr_edge_hist(to_gray(frame_list[i]), nbins_edge_ori, nbins_edge_mag, pyr_level)[:, 0]
+
+        color_hist = color_hist.T
+        edge_hist = edge_hist.T
+
+        self.feature = np.concatenate([color_hist, edge_hist], axis=1)
+        return self.feature
+
+
+    def post_process(self, min_shot_len=40):  # no gfl
+        frame_list = self.frame_list
+        info_list = self.info_list
+        X_diff = self.X_diff
+
+        start_idx = -1
+        end_idx = -1
+        shotlen = -1
+        max_shot_len = min_shot_len * 3
+
+        for i in tqdm(range(len(frame_list)), desc="Post process"):
+            if start_idx < 0 and info_list[i]["valid"]:
+                start_idx = i
+            if start_idx >= 0 and (not info_list[i]["valid"] or i + 1 == len(frame_list)):
+                end_idx = i
+                shotlen = end_idx - start_idx + 1
+                if shotlen >= max_shot_len:
+                    njumps = int(np.floor(shotlen / min_shot_len))
+                    v_diff = X_diff[start_idx:end_idx + 1]
+                    jump = sbd_heuristic(v_diff, njumps, min_shot_len)
+                    # print(start_idx, end_idx, jump)
+                    for k in range(len(jump)):
+                        info_list[start_idx + jump[k] - 1]["valid"] = False
+                        info_list[start_idx + jump[k] - 1]["flag"] += "[GFL] "
+
+                start_idx = -1
+                end_idx = -1
+
+
+    def update_shot_range(self, min_shot_len):
+        frame_list = self.frame_list
+        info_list = self.info_list
+        ranges = []
+        sb0 = sb1 = -1
+        for i in range(len(frame_list)):
+            if info_list[i]["valid"]:
+                if sb0 < 0:
+                    sb0 = i
+                sb1 = i
+
+            if sb0 >= 0 and sb1 >= 0 and (not info_list[i]["valid"] or i + 1 == len(frame_list)):
+                # print(sb0, sb1)
+                if sb1 - sb0 + 1 > min_shot_len:
+                    ranges.append(ShotRange(sb0, sb1))
+                else:
+                    for j in range(sb0, sb1 + 1):
+                        info_list[j]["valid"] = False
+                        info_list[j]["flag"] += "SHORT "
+                sb0 = sb1 = -1
+        self.ranges = ranges
+        return ranges
+
+
+    def parse_frame_info(self):
+        frame_list = self.frame_list
+        info_list = []
+        for idx, bgr in enumerate(tqdm(frame_list, desc="Parse frame info")):
+            gray = to_gray(bgr)
+
+            info = {
+                "id": idx,
+                "brightness": calc_brightness(bgr),
+                "sharpness": calc_sharpness(gray),
+                "uniformity": calc_uniformity(gray),
+                "valid": True,
+                "flag": "",
+            }
+            # print(info)
+
+            info_list.append(info)
+        self.info_list = info_list
+        return info_list
+
+
+    def debug_show_invalid(self):
+        info_list = self.info_list
+        frame_list = self.frame_list
+        for item in info_list:
+            if not item["valid"]:
+                print(item)
+                cv.imshow("2", frame_list[item["id"]])
+                cv.waitKey()
+
+
+    def debug_show_certain_invalid(self, key):
+        info_list = self.info_list
+        frame_list = self.frame_list
+        for item in info_list:
+            if not item["valid"] and key in item["flag"]:
+                print(item)
+                cv.imshow("2", frame_list[item["id"]])
+                cv.waitKey()
+
+
+    def debug_show_valid(self):
+        info_list = self.info_list
+        frame_list = self.frame_list
+        for item in info_list:
+            if item["valid"]:
+                print(item)
+                cv.imshow("2", frame_list[item["id"]])
+                cv.waitKey()
 
 
 def sbd_heuristic(v_diff, njumps, min_shot_len):
@@ -325,7 +427,6 @@ def sbd_heuristic(v_diff, njumps, min_shot_len):
     sorted_v_idx = [i for i in range(len(v_diff))]
     sorted_v_idx = sorted(sorted_v_idx, key=lambda id: v_diff[id])
     sorted_v_diff = sorted(v_diff)
-    print(len(sorted_v_diff))
     for i in range(len(sorted_v_diff) - 1, -1, -1):
         add = True
         if sorted_v_idx[i] + 1 < min_shot_len or len(v_diff) - sorted_v_idx[i] < min_shot_len:
@@ -342,80 +443,18 @@ def sbd_heuristic(v_diff, njumps, min_shot_len):
             break
     return jump
 
-
-def update_shot_range(frame_list, info_list, min_shot_len):
-    ranges = []
-    sb0 = sb1 = -1
-    for i in range(len(frame_list)):
-        if info_list[i]["valid"]:
-            if sb0 < 0:
-                sb0 = i
-            sb1 = i
-
-        if sb0 >= 0 and sb1 >= 0 and (not info_list[i]["valid"] or i + 1 == len(frame_list)):
-            print(sb0, sb1)
-            if sb1 - sb0 + 1 > min_shot_len:
-                ranges.append(ShotRange(sb0, sb1))
-            else:
-                for j in range(sb0, sb1 + 1):
-                    info_list[j]["valid"] = False
-                    info_list[j]["flag"] += "SHORT "
-            sb0 = sb1 = -1
-    return ranges
-
-
-def parse_frame_info(frame_list):
-    info_list = []
-    for idx, bgr in enumerate(tqdm(frame_list)):
-        gray = to_gray(bgr)
-
-        info = {
-            "id": idx,
-            "brightness": calc_brightness(bgr),
-            "sharpness": calc_sharpness(gray),
-            "uniformity": calc_uniformity(gray),
-            "valid": True,
-            "flag": "",
-        }
-        # print(info)
-
-        info_list.append(info)
-    return info_list
-
-
-def debug_show_invalid(info_list):
-    for item in info_list:
-        if not item["valid"]:
-            print(item)
-            cv.imshow("2", frame_list[item["id"]])
-            cv.waitKey()
-
-
-def debug_show_certain_invalid(info_list, key):
-    for item in info_list:
-        if not item["valid"] and key in item["flag"]:
-            print(item)
-            cv.imshow("2", frame_list[item["id"]])
-            cv.waitKey()
-
-
-def debug_show_valid(info_list):
-    for item in info_list:
-        if item["valid"]:
-            print(item)
-            cv.imshow("2", frame_list[item["id"]])
-            cv.waitKey()
-
-
 if __name__ == "__main__":
-    frame_list = parse_video("video.mp4")
-    info_list = parse_frame_info(frame_list)
-    filter_low_quality(info_list)
-    X_diff, X_ecr = filter_transition(info_list, frame_list)
-    # feature = extract_histo_features(frame_list, info_list)
-    post_process(frame_list, info_list, X_diff)
-    ranges = update_shot_range(frame_list, info_list, 40)
+    parser = VideoParser()
+    ranges = parser.parse_video("video.mp4")
     print(ranges)
-    # debug_show_certain_invalid(info_list, "[GFL]")
-    debug_show_valid(info_list)
+#     frame_list = parse_video("video.mp4")
+#     info_list = parse_frame_info(frame_list)
+#     filter_low_quality(info_list)
+#     X_diff, X_ecr = filter_transition(info_list, frame_list)
+#     # feature = extract_histo_features(frame_list, info_list)
+#     post_process(frame_list, info_list, X_diff)
+#     ranges = update_shot_range(frame_list, info_list, 40)
+#     print(ranges)
+#     # debug_show_certain_invalid(info_list, "[GFL]")
+#     debug_show_valid(info_list)
     # print(feature.shape)
