@@ -6,8 +6,8 @@ import func
 
 
 def detect_thumbnail_frames(opt, meta, v_shot_range,
-                            X: np.ndarray, diff: np.ndarray, v_thumb_idx: list):
-    v_thumb_idx.clear()
+                            X: np.ndarray, diff: np.ndarray) -> list:
+    v_thumb_idx = []
 
     minK = 5
     maxK = 30
@@ -24,7 +24,7 @@ def detect_thumbnail_frames(opt, meta, v_shot_range,
         minidx = -1
         minval = sys.float_info.max
         for i in range(nfrm):
-            val = diff[i]
+            val = func.mat_at(diff, i)
             if val < minval:
                 minval = val
                 minidx = i
@@ -46,7 +46,7 @@ def detect_thumbnail_frames(opt, meta, v_shot_range,
             v_keyfrm_idx.append(v_shot_range[i].v_range[max_subshot_id].v_idx[0])
 
         # Include keyframes sorted by shot length
-        v_srt_val, v_srt_idx = func.hecate_sort(v_shot_len) # sorted sorted indices/values
+        _, v_srt_idx = func.hecate_sort(v_shot_len)     # sorted indices/values
         len_idx = len(v_srt_idx)
         for i in range(len_idx):
             v_thumb_idx.append(v_keyfrm_idx[v_srt_idx[len_idx - 1 - i]])
@@ -58,5 +58,32 @@ def detect_thumbnail_frames(opt, meta, v_shot_range,
                 v_valid_frm_idx.append(v_shot_range[i].v_range[j].v_idx[0])
                 v_valid_frm_shotlen.append(v_shot_range[i].v_range[j].length())
 
-        # km_data = np.zeros(shape=(nfrm_valid, X.shape[1], dtype=X.dtype))
-        # X.dtype
+        km_data = np.zeros(shape=(nfrm_valid, X.shape[1]), dtype=X.dtype)
+        for i in range(len(v_valid_frm_idx)):
+            km_data[i] = X[v_valid_frm_idx[i]].copy()
+
+        km_k = min(maxK, min(nfrm_valid, max(minK, opt.njpg)))
+        km_lbl, km_ctr = func.perform_kmeans(km_data, km_k, 5)
+
+        clust_sz = [0] * km_k
+        for i in range(km_lbl.shape[0]):
+            clust_sz[func.mat_at(km_lbl, i)] += v_valid_frm_shotlen[i]
+
+        _, v_srt_idx = func.hecate_sort(clust_sz)   # sorted indices/values
+
+        # obtain thumbnails -- the most still frame per cluster
+        for i in range(km_k):
+            diff_min_idx = -1
+            diff_min_val = sys.float_info.max
+            for j in range(km_lbl.shape[0]):
+                if func.mat_at(km_lbl, j) == v_srt_idx[km_k - 1 - i]:
+                    mean_diff_j = func.mat_at(diff, v_valid_frm_idx[j])
+                    if mean_diff_j < diff_min_val:
+                        diff_min_val = mean_diff_j
+                        diff_min_idx = v_valid_frm_idx[j]
+            v_thumb_idx.append(v_valid_frm_idx[diff_min_idx])
+
+    for i in range(len(v_thumb_idx)):
+        v_thumb_idx[i] *= opt.step_sz
+
+    return v_thumb_idx
