@@ -1,4 +1,5 @@
 from optparse import OptionParser
+import os
 
 
 class HecateParams:
@@ -16,11 +17,20 @@ class HecateParams:
                              help='Window for dropping neighbor frames of low-quality ones (seconds)')
         opt = optparser.parse_args(args)[0]
 
-        self.in_video = opt.in_video
-        self.out_dir = opt.out_dir
+        self.in_video = os.path.relpath(opt.in_video)
+        self.out_dir = os.path.relpath(opt.out_dir)
         self.step_sz = int(opt.step_sz)
         self.njpg = int(opt.njpg)
         self.invalid_wnd = float(opt.invalid_wnd)
 
     def __str__(self):
         return str(self.__dict__)
+
+
+class VideoMetadata:
+    def __init__(self, nframes: int, width: int, height: int, duration: float, fps: float):
+        self.nframes = nframes
+        self.width = width
+        self.height = height
+        self.duration = duration
+        self.fps = fps

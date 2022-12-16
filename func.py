@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from typing import Tuple
 
 
 def reorder(sorted_l: list, index_map: list) -> list:
@@ -10,7 +11,7 @@ def reorder(sorted_l: list, index_map: list) -> list:
     return ordered
 
 
-def hecate_sort(unsorted: list) -> (list, list):
+def hecate_sort(unsorted: list) -> Tuple[list, list]:
     size = len(unsorted)
     index_map = [0] * size
     for i in range(size):
@@ -21,7 +22,7 @@ def hecate_sort(unsorted: list) -> (list, list):
 
 
 def perform_kmeans(km_data: np.ndarray, ncluster: int, km_attempts: int = 1,
-                   km_max_cnt: int = 1000, km_eps: float = 0.0001) -> (np.ndarray, np.ndarray):
+                   km_max_cnt: int = 1000, km_eps: float = 0.0001) -> Tuple[np.ndarray, np.ndarray]:
     km_lbl = np.zeros(shape=(1, 1), dtype=np.int32)
     km_ctr = np.zeros(shape=(1, 1), dtype=np.float32)
     if km_data.shape[0] == 1:

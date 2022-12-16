@@ -3,9 +3,10 @@ import sys
 import numpy as np
 
 import func
+import config
 
 
-def detect_thumbnail_frames(opt, meta, v_shot_range,
+def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata, v_shot_range: list,
                             X: np.ndarray, diff: np.ndarray) -> list:
     v_thumb_idx = []
 

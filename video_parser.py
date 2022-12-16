@@ -2,20 +2,22 @@ import cv2 as cv
 import numpy as np
 from tqdm import tqdm
 
+from mylogger import logger
 
-class VideoParser:
-    def __init__(self, path):
-        self.frame_list = parse_video(path)
-        self.info_list = parse_frame_info(self.frame_list)
-        self.X_diff = None
-        self.X_ecr = None
-        self.feature = None
 
-    def filter(self):
-        filter_low_quality(self.info_list)
-        self.X_diff, self.X_ecr = filter_transition(info_list, frame_list)
-        self.feature = extract_histo_features(frame_list, info_list)
-        post_process(frame_list, info_list, X_diff)
+# class VideoParser:
+#     def __init__(self, path):
+#         self.frame_list = parse_video(path)
+#         self.info_list = parse_frame_info(self.frame_list)
+#         self.X_diff = None
+#         self.X_ecr = None
+#         self.feature = None
+#
+#     def filter(self):
+#         filter_low_quality(self.info_list)
+#         self.X_diff, self.X_ecr = filter_transition(self.info_list, self.frame_list)
+#         self.feature = extract_histo_features(self.frame_list, self.info_list)
+#         post_process(self.frame_list, self.info_list, self.X_diff)
 
 
 def parse_video(path):
@@ -299,7 +301,7 @@ def post_process(frame_list, info_list, X_diff, min_shot_len=40):  # no gfl
                 njumps = int(np.floor(shotlen / min_shot_len))
                 v_diff = X_diff[start_idx:end_idx + 1]
                 jump = sbd_heuristic(v_diff, njumps, min_shot_len)
-                print(start_idx, end_idx, jump)
+                logger.debug(f'{start_idx} {end_idx} {jump}')
                 for k in range(len(jump)):
                     info_list[start_idx + jump[k] - 1]["valid"] = False
                     info_list[start_idx + jump[k] - 1]["flag"] += "[GFL] "
@@ -313,7 +315,7 @@ def sbd_heuristic(v_diff, njumps, min_shot_len):
     sorted_v_idx = [i for i in range(len(v_diff))]
     sorted_v_idx = sorted(sorted_v_idx, key=lambda id: v_diff[id])
     sorted_v_diff = sorted(v_diff)
-    print(len(sorted_v_diff))
+    logger.debug(len(sorted_v_diff))
     for i in range(len(sorted_v_diff) - 1, -1, -1):
         add = True
         if sorted_v_idx[i] + 1 < min_shot_len or len(v_diff) - sorted_v_idx[i] < min_shot_len:
@@ -341,7 +343,7 @@ def update_shot_range(frame_list, info_list, min_shot_len):
             sb1 = i
 
         if sb0 >= 0 and sb1 >= 0 and (not info_list[i]["valid"] or i + 1 == len(frame_list)):
-            print(sb0, sb1)
+            logger.debug(f'{sb0} {sb1}')
             if sb1 - sb0 + 1 > min_shot_len:
                 ranges.append((sb0, sb1))
             else:
@@ -365,45 +367,31 @@ def parse_frame_info(frame_list):
             "valid": True,
             "flag": "",
         }
-        # print(info)
+        # logger.info(info)
 
         info_list.append(info)
     return info_list
 
 
-def debug_show_invalid(info_list):
+def debug_show_invalid(frame_list, info_list):
     for item in info_list:
         if not item["valid"]:
-            print(item)
-            cv.imshow("2", frame_list[item["id"]])
+            logger.debug(item)
+            cv.imshow("Invalid", frame_list[item["id"]])
             cv.waitKey()
 
 
-def debug_show_certain_invalid(info_list, key):
+def debug_show_certain_invalid(frame_list, info_list, key):
     for item in info_list:
         if not item["valid"] and key in item["flag"]:
-            print(item)
-            cv.imshow("2", frame_list[item["id"]])
+            logger.debug(item)
+            cv.imshow("Invalid", frame_list[item["id"]])
             cv.waitKey()
 
 
-def debug_show_valid(info_list):
+def debug_show_valid(frame_list, info_list):
     for item in info_list:
         if item["valid"]:
-            print(item)
-            cv.imshow("2", frame_list[item["id"]])
+            logger.debug(item)
+            cv.imshow("Valid", frame_list[item["id"]])
             cv.waitKey()
-
-
-if __name__ == "__main__":
-    frame_list = parse_video("video.mp4")
-    info_list = parse_frame_info(frame_list)
-    filter_low_quality(info_list)
-    X_diff, X_ecr = filter_transition(info_list, frame_list)
-    # feature = extract_histo_features(frame_list, info_list)
-    post_process(frame_list, info_list, X_diff)
-    ranges = update_shot_range(frame_list, info_list, 40)
-    print(ranges)
-    # debug_show_certain_invalid(info_list, "[GFL]")
-    debug_show_valid(info_list)
-    # print(feature.shape)
