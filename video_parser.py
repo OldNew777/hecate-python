@@ -352,9 +352,9 @@ class VideoParser:
                 sorted_transition[i]["valid"] = False
                 sorted_transition[i]["flag"] += "ECR "
 
-        self.X_diff = v_diff
-        self.X_ecr = v_ecr
-        return v_diff, v_ecr
+        self.X_diff = np.array(v_diff).reshape([len(v_diff), 1])
+        self.X_ecr = np.array(v_ecr).reshape([len(v_ecr), 1])
+        return self.X_diff, self.X_ecr
 
     @func.time_it
     def extract_histo_features(self, pyr_level=2, omit_filtered=True, nbins_color=128,
