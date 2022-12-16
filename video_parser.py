@@ -295,6 +295,7 @@ def sbd_heuristic(v_diff, njumps, min_shot_len):
     sorted_v_idx = [i for i in range(len(v_diff))]
     sorted_v_idx = sorted(sorted_v_idx, key=lambda id: v_diff[id])
     sorted_v_diff = sorted(v_diff)
+    print(len(sorted_v_diff))
     for i in range(len(sorted_v_diff) - 1, -1, -1):
         add = True
         if sorted_v_idx[i] + 1 < min_shot_len or len(v_diff) - sorted_v_idx[i] < min_shot_len:
@@ -310,6 +311,26 @@ def sbd_heuristic(v_diff, njumps, min_shot_len):
         if len(jump) == njumps:
             break
     return jump
+
+def update_shot_range(frame_list, info_list, min_shot_len):
+    ranges = []
+    sb0 = sb1 = -1
+    for i in range(len(frame_list)):
+        if info_list[i]["valid"]:
+            if sb0 < 0:
+                sb0 = i
+            sb1 = i
+
+        if sb0 >= 0 and sb1 >= 0 and (not info_list[i]["valid"] or i + 1 == len(frame_list)):
+            print(sb0, sb1)
+            if sb1 - sb0 + 1 > min_shot_len:
+                ranges.append((sb0, sb1))
+            else:
+                for j in range(sb0, sb1 + 1):
+                    info_list[j]["valid"] = False
+                    info_list[j]["flag"] += "SHORT "
+            sb0 = sb1 = -1
+    return ranges
 
 def parse_frame_info(frame_list):
     info_list = []
@@ -351,12 +372,14 @@ def debug_show_valid(info_list):
             cv.waitKey()
 
 if __name__ == "__main__":
-    frame_list = parse_video("video.mp4")[0:1000]
+    frame_list = parse_video("video.mp4")
     info_list = parse_frame_info(frame_list)
     filter_low_quality(info_list)
     X_diff, X_ecr = filter_transition(info_list, frame_list)
-    feature = extract_histo_features(frame_list, info_list)
+    # feature = extract_histo_features(frame_list, info_list)
     post_process(frame_list, info_list, X_diff)
-    debug_show_certain_invalid(info_list, "[GFL]")
+    ranges = update_shot_range(frame_list, info_list, 40)
+    print(ranges)
+    # debug_show_certain_invalid(info_list, "[GFL]")
     debug_show_valid(info_list)
-    print(feature.shape)
+    # print(feature.shape)
