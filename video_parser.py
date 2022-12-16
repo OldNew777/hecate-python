@@ -2,6 +2,20 @@ import cv2 as cv
 import numpy as np
 from tqdm import tqdm
 
+class VideoParser:
+    def __init__(self, path):
+        self.frame_list = parse_video(path)
+        self.info_list = parse_frame_info(self.frame_list)
+        self.X_diff = None
+        self.X_ecr = None
+        self.feature = None
+
+    def filter(self):
+        filter_low_quality(self.info_list)
+        self.X_diff, self.X_ecr = filter_transition(info_list, frame_list)
+        self.feature = extract_histo_features(frame_list, info_list)
+        post_process(frame_list, info_list, X_diff)
+
 def parse_video(path):
     video = cv.VideoCapture(path)
     if not video.isOpened():
@@ -107,7 +121,7 @@ def calc_pyr_color_hist(img, nbins = 128, level = 2):
                 p_height = int(np.floor(h / 2 ** l))
                 p_x = x * p_width
                 p_y = y * p_height
-                patch_img = img[p_x:p_x + p_width, p_y:p_y + p_height]
+                patch_img = img[p_y:p_y + p_height, p_x:p_x + p_width]
                 patch_hist = calc_hsv_hist(patch_img, nbins)
                 hist[hist_sz * patch:hist_sz * patch + hist_sz] = patch_hist
                 patch += 1
@@ -132,7 +146,7 @@ def calc_pyr_edge_hist(img, nbins_ori = 16, nbins_mag = 16, level = 2):
                 p_height = int(np.floor(h / 2 ** l))
                 p_x = x * p_width
                 p_y = y * p_height
-                patch_img = img[p_x:p_x + p_width, p_y:p_y + p_height]
+                patch_img = img[p_y:p_y + p_height, p_x:p_x + p_width]
                 patch_hist = calc_egde_hist(patch_img, nbins_ori, nbins_mag)
                 hist[hist_sz * patch:hist_sz * patch + hist_sz] = patch_hist
                 patch += 1
@@ -157,8 +171,8 @@ def calc_pyr_edge_hist_g(gx, gy, nbins_ori = 16, nbins_mag = 16, level = 2):
                 p_height = int(np.floor(h / 2 ** l))
                 p_x = x * p_width
                 p_y = y * p_height
-                patch_gx = gx[p_x:p_x + p_width, p_y:p_y + p_height]
-                patch_gy = gy[p_x:p_x + p_width, p_y:p_y + p_height]
+                patch_gx = gx[p_y:p_y + p_height, p_x:p_x + p_width]
+                patch_gy = gy[p_y:p_y + p_height, p_x:p_x + p_width]
                 patch_hist = calc_egde_hist_g(patch_gx, patch_gy, nbins_ori, nbins_mag)
                 hist[hist_sz * patch:hist_sz * patch + hist_sz] = patch_hist
                 patch += 1
@@ -229,6 +243,8 @@ def filter_transition(info_list, frame_list, max_filter_percentage=0.1, threshol
             sorted_transition[i]["valid"] = False
             sorted_transition[i]["flag"] += "ECR "
 
+    return v_diff, v_ecr
+
 def extract_histo_features(frame_list, info_list, pyr_level = 2, omit_filtered = True, nbins_color = 128, 
                            nbins_edge_ori = 8, nbins_edge_mag = 8):
     npatches = 0
@@ -249,6 +265,51 @@ def extract_histo_features(frame_list, info_list, pyr_level = 2, omit_filtered =
     color_hist = color_hist.T
     edge_hist = edge_hist.T
     return np.concatenate([color_hist, edge_hist], axis=1)
+
+def post_process(frame_list, info_list, X_diff, min_shot_len = 40): # no gfl
+    start_idx = -1
+    end_idx = -1
+    shotlen = -1
+    max_shot_len = min_shot_len * 3
+
+    for i in tqdm(range(len(frame_list))):
+        if start_idx < 0 and info_list[i]["valid"]:
+            start_idx = i
+        if start_idx >= 0 and (not info_list[i]["valid"] or i + 1 == len(frame_list)):
+            end_idx = i
+            shotlen = end_idx - start_idx + 1
+            if shotlen >= max_shot_len:
+                njumps = int(np.floor(shotlen / min_shot_len))
+                v_diff = X_diff[start_idx:end_idx + 1]
+                jump = sbd_heuristic(v_diff, njumps, min_shot_len)
+                print(start_idx, end_idx, jump)
+                for k in range(len(jump)):
+                    info_list[start_idx + jump[k] - 1]["valid"] = False
+                    info_list[start_idx + jump[k] - 1]["flag"] += "[GFL] "
+
+            start_idx = -1
+            end_idx = -1
+
+def sbd_heuristic(v_diff, njumps, min_shot_len):
+    jump = []
+    sorted_v_idx = [i for i in range(len(v_diff))]
+    sorted_v_idx = sorted(sorted_v_idx, key=lambda id: v_diff[id])
+    sorted_v_diff = sorted(v_diff)
+    for i in range(len(sorted_v_diff) - 1, -1, -1):
+        add = True
+        if sorted_v_idx[i] + 1 < min_shot_len or len(v_diff) - sorted_v_idx[i] < min_shot_len:
+            add = False
+        else:
+            for j in range(len(jump)):
+                length = abs(jump[j] - sorted_v_idx[i]) + 1
+                if length < min_shot_len:
+                    add = False
+                    break
+        if add:
+            jump.append(sorted_v_idx[i])
+        if len(jump) == njumps:
+            break
+    return jump
 
 def parse_frame_info(frame_list):
     info_list = []
@@ -290,11 +351,12 @@ def debug_show_valid(info_list):
             cv.waitKey()
 
 if __name__ == "__main__":
-    frame_list = parse_video("video.mp4")
+    frame_list = parse_video("video.mp4")[0:1000]
     info_list = parse_frame_info(frame_list)
     filter_low_quality(info_list)
-    filter_transition(info_list, frame_list)
-    # debug_show_certain_invalid(info_list, "ECR")
-    # debug_show_valid(info_list)
+    X_diff, X_ecr = filter_transition(info_list, frame_list)
     feature = extract_histo_features(frame_list, info_list)
+    post_process(frame_list, info_list, X_diff)
+    debug_show_certain_invalid(info_list, "[GFL]")
+    debug_show_valid(info_list)
     print(feature.shape)
