@@ -1,6 +1,7 @@
 import cv2 as cv
 import numpy as np
 from tqdm import tqdm
+import sys
 
 import config
 import func
@@ -263,6 +264,7 @@ class VideoParser:
         # self.extract_histo_features()
         self.post_process()
         self.update_shot_range(40)
+        self.filter_redundant_and_obtain_subshots()
 
         return self.ranges
 
@@ -423,6 +425,66 @@ class VideoParser:
 
                 start_idx = -1
                 end_idx = -1
+
+    @func.time_it
+    def filter_redundant_and_obtain_subshots(self):
+        valid_frame = [item for id, item in enumerate(self.frame_list) if self.info_list[id].valid]
+        nfrm_valid = len(valid_frame)
+        if len(nfrm_valid) == 0:
+            return
+
+        km_data = np.ndarray([len(nfrm_valid), self.feature.shape[1]], dtype=self.feature.dtype)
+        v_idxmap = np.zeros([len(nfrm_valid)], dtype=int)
+
+        row = 0
+        for i in range(len(self.frame_list)):
+            if self.info_list[i].valid:
+                km_data[row] = np.copy(self.feature[row])
+                v_idxmap[row] = i
+                row += 1
+
+        ncluster = min(len(nfrm_valid) // 2, len(self.ranges))
+        km_lbl, km_ctr = perform_kmeans(km_data, ncluster)
+
+        v_frm_clusterid = -np.ones(len(self.frame_list))
+        for i in range(km_lbl.shape[0]):
+            v_frm_clusterid[v_idxmap[i]] = km_lbl[i]
+
+        for shotid, shot in enumerate(self.ranges):
+            sb0 = shot.start
+            sb1 = shot.end
+
+            ssb0 = -1
+            ssb1 = -1
+            lbl = -1
+            for j in range(sb0, sb1 + 1):
+                if self.info_list[j].valid:
+                    if ssb0 < 0:
+                        ssb0 = j
+                        lbl = v_frm_clusterid[j]
+                    ssb1 = j
+                if ssb0 >= 0 and (v_frm_clusterid[j] != lbl or j == sb1):
+                    diff_min_idx = -1
+                    diff_min_val = sys.float_info.max
+                    for k in range(ssb0, ssb1 + 1):
+                        diff_k = self.X_diff[k]
+                        if diff_k < diff_min_idx:
+                            diff_min_idx = k
+                            diff_min_val = diff_k
+                    
+                    r = Range(ssb0, ssb1)
+                    r.v_idx.append(diff_min_idx)
+                    self.ranges[shotid].v_idx.append(diff_min_idx)
+                    self.ranges[shotid].v_range.append(r)
+
+                    for k in range(ssb0, ssb1 + 1):
+                        if k != diff_min_idx:
+                            self.info_list[k].valid = False
+                            self.info_list[k].flag += "[Redundant] "
+
+                    ssb0 = ssb1 = lbl = -1
+            sb0 = sb1 = -1
+        
 
     def update_shot_range(self, min_shot_len):
         frame_list = self.frame_list
