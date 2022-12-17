@@ -270,7 +270,7 @@ class VideoParser:
     @func.time_it
     def parse_video(self, opt: config.HecateParams):
         self.opt = opt
-        self.init(opt.in_video)
+        self.init(opt.video_file)
         # self.frame_list = self.frame_list[0:1000]
         self.parse_frame_info()
         self.filter_low_quality()
@@ -570,7 +570,7 @@ class VideoParser:
             else:
                 pdf_indexes[i] = 0
 
-        with open(os.path.join(os.path.dirname(self.opt.in_video), 'chat.json'), 'r', encoding='utf-8') as f:
+        with open(os.path.join(os.path.dirname(self.opt.video_file), 'chat.json'), 'r', encoding='utf-8') as f:
             chats = json.load(f)
         chat_scores = np.zeros(shape=(len(frame_list)), dtype=np.float32)
         for chat in tqdm(chats, 'Compute chat scores'):
@@ -579,7 +579,7 @@ class VideoParser:
             chat_pdf = chat_pdfs[pdf_indexes[chat_frame_index]]
             for i in range(max(chat_window[0], -chat_frame_index), min(chat_window[1], self.meta.nframes - chat_frame_index)):
                 chat_scores[chat_frame_index + i] += chat_pdf[i]
-        self.chat_scores = chat_scores
+        self.chat_scores = chat_scores / np.max(chat_scores)
 
         # max_index = np.argmax(chat_scores)
         # logger.debug(f'chat_scores: {chat_scores.shape}, {chat_scores[max_index]}')

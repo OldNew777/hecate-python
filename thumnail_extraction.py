@@ -12,7 +12,7 @@ from mylogger import logger
 
 @func.time_it
 def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata, v_shot_range: list,
-                            feature: np.ndarray, diff: np.ndarray) -> list:
+                            feature: np.ndarray, diff: np.ndarray, chat_scores: np.ndarray) -> list:
     v_thumb_idx = []
 
     minK = 5
@@ -25,16 +25,17 @@ def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata
             v_frm_valid[v_shot_range[i].v_idx[j]] = True
 
     nfrm_valid = sum(v_frm_valid)
-    if nfrm_valid <= 1:
-        # If there's no valid frame, pick one most still frame
-        minidx = -1
-        minval = sys.float_info.max
+    if nfrm_valid == 0:
+        # If there's no valid frame, pick one most still/chat frame
+        min_idx = -1
+        min_val = sys.float_info.max
         for i in range(nfrm):
-            val = func.mat_at(diff, i)
-            if val < minval:
-                minval = val
-                minidx = i
-        v_thumb_idx.append(minidx)
+            val = func.mat_at(diff, i) + (1.0 - chat_scores[i]) * opt.chat_alpha
+            if val < min_val:
+                min_val = val
+                min_idx = i
+        logger.debug(f'No valid frame, pick most still/chat frame: {min_idx}, value = {min_val}')
+        v_thumb_idx.append(min_idx)
     elif nfrm_valid <= opt.njpg:
         # If not enough frames are left,
         # include all remaining keyframes sorted by shot length
@@ -80,18 +81,18 @@ def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata
 
         # obtain thumbnails -- the most still frame per cluster
         for i in range(km_k):
-            diff_min_idx = -1
-            diff_min_val = sys.float_info.max
+            min_idx = -1
+            min_val = sys.float_info.max
             for j in range(km_lbl.shape[0]):
                 if func.mat_at(km_lbl, j) == v_srt_idx[km_k - 1 - i]:
-                    mean_diff_j = func.mat_at(diff, v_valid_frm_idx[j])
-                    if mean_diff_j < diff_min_val:
-                        diff_min_idx = j
-                        diff_min_val = mean_diff_j
-            # logger.debug(f'v_valid_frm_idx[diff_min_idx]')
-            # logger.debug(f'v_valid_frm_idx[{diff_min_idx}]')
-            # logger.debug(f'{v_valid_frm_idx[diff_min_idx]}')
-            v_thumb_idx.append(v_valid_frm_idx[diff_min_idx])
+                    mean_diff_j = func.mat_at(diff, v_valid_frm_idx[j]) + (1.0 - chat_scores[v_valid_frm_idx[j]]) * opt.chat_alpha
+                    if mean_diff_j < min_val:
+                        min_idx = j
+                        min_val = mean_diff_j
+            # logger.debug(f'v_valid_frm_idx[min_idx]')
+            # logger.debug(f'v_valid_frm_idx[{min_idx}]')
+            # logger.debug(f'{v_valid_frm_idx[min_idx]}')
+            v_thumb_idx.append(v_valid_frm_idx[min_idx])
 
     for i in range(len(v_thumb_idx)):
         v_thumb_idx[i] *= opt.step_sz
@@ -99,6 +100,7 @@ def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata
     return v_thumb_idx
 
 
+@func.time_it
 def generate_thumbnails(opt: config.HecateParams, v_thumb_idx: list) -> None:
     njpg_count = 0
     frame_index = 0
@@ -108,7 +110,7 @@ def generate_thumbnails(opt: config.HecateParams, v_thumb_idx: list) -> None:
         shutil.rmtree(out_dir)
     os.makedirs(out_dir)
 
-    video = cv2.VideoCapture(opt.in_video)
+    video = cv2.VideoCapture(opt.video_file)
     assert video.isOpened(), 'Cannot capture source'
     while njpg_count < len(v_thumb_idx):
         ret, frame = video.read()
