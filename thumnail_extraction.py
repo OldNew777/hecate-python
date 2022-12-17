@@ -12,7 +12,7 @@ from mylogger import logger
 
 @func.time_it
 def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata, v_shot_range: list,
-                            X: np.ndarray, diff: np.ndarray) -> list:
+                            feature: np.ndarray, diff: np.ndarray) -> list:
     v_thumb_idx = []
 
     minK = 5
@@ -65,9 +65,9 @@ def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata
                 v_valid_frm_shotlen.append(v_shot_range[i].v_range[j].length())
         # logger.debug(f'v_valid_frm_idx: {len(v_valid_frm_idx)} {v_valid_frm_idx}')
 
-        km_data = np.zeros(shape=(nfrm_valid, X.shape[1]), dtype=X.dtype)
+        km_data = np.zeros(shape=(nfrm_valid, feature.shape[1]), dtype=feature.dtype)
         for i in range(len(v_valid_frm_idx)):
-            km_data[i] = X[v_valid_frm_idx[i]].copy()
+            km_data[i] = feature[v_valid_frm_idx[i]].copy()
 
         km_k = min(maxK, min(nfrm_valid, max(minK, opt.njpg)))
         km_lbl, km_ctr = func.perform_kmeans(km_data, km_k, 5)

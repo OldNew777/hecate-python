@@ -5,6 +5,20 @@ import time
 from mylogger import logger
 
 
+def gaussian_distribution(x: float, mu: float = 0.0, sigma: float = 1.0) -> float:
+    return np.exp(-np.power(x - mu, 2.) / (2 * np.power(sigma, 2.)))
+
+
+def regularized_gaussian_distribution_0_1(x: float) -> float:
+    if x < -1.0 or x > 1.0:
+        return 0.0
+    return (gaussian_distribution(x, 0.0, 0.5) - 0.1353352832366127) / 0.8646647167633873
+
+
+def normalize_pdf(pdf: np.ndarray) -> np.ndarray:
+    return pdf / np.sum(pdf)
+
+
 def time_it(func):
     def wrapper(*args, **kwargs):
         logger.info(f'Running {func.__name__}...')

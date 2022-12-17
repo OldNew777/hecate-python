@@ -1,7 +1,10 @@
+import os.path
+
 import cv2 as cv
 import numpy as np
 from tqdm import tqdm
 import sys
+import json
 
 import config
 import func
@@ -254,6 +257,7 @@ def sbd_heuristic(v_diff, njumps, min_shot_len):
 
 class VideoParser:
     def __init__(self):
+        self.chat_scores = None
         self.opt = None
         self.frame_list = None
         self.info_list = None
@@ -333,8 +337,8 @@ class VideoParser:
         v_diff = [0]
         for i in range(1, len(frame_list) - 1):
             v_diff.append(
-                (cv.norm(frame_list[i] - frame_list[i - 1]) + cv.norm(frame_list[i + 1] - frame_list[i]))
-                / (2. * img_size)
+                (cv.norm(frame_list[i] - frame_list[i - 1]) +
+                 cv.norm(frame_list[i + 1] - frame_list[i])) / (2. * img_size)
             )
         v_diff.append(0)
 
@@ -539,6 +543,49 @@ class VideoParser:
 
             info_list.append(info)
         self.info_list = info_list
+
+        # compute screen chat scores
+        assert len(frame_list) == self.meta.nframes
+        chat_window = (int(-self.meta.fps * self.opt.chat_window[1]),
+                       int(-self.meta.fps * self.opt.chat_window[0]))    # reverse here to transform from frame view to chat view
+        chat_pdf = np.zeros(shape=(chat_window[1] - chat_window[0]), dtype=np.float32)
+        for i in range(chat_window[0], 0):
+            chat_pdf[i] = func.regularized_gaussian_distribution_0_1(i / chat_window[0])
+        for i in range(0, chat_window[1]):
+            chat_pdf[i] = func.regularized_gaussian_distribution_0_1(i / chat_window[1])
+        chat_pdf = func.normalize_pdf(chat_pdf)
+        pdf_indexes = [0] * len(frame_list)
+        pdf_index = 1
+        chat_pdfs = [chat_pdf]
+        for i in tqdm(range(self.meta.nframes), 'Init chat pdf'):
+            if i + chat_window[0] < 0 or i + chat_window[1] >= self.meta.nframes:
+                chat_pdf_new = chat_pdf.copy()
+                for j in range(chat_window[0], chat_window[1]):
+                    if i + j < 0 or i + j >= self.meta.nframes:
+                        chat_pdf_new[j] = 0.0
+                chat_pdf_new = func.normalize_pdf(chat_pdf_new)
+                chat_pdfs.append(chat_pdf_new)
+                pdf_indexes[i] = pdf_index
+                pdf_index += 1
+            else:
+                pdf_indexes[i] = 0
+
+        with open(os.path.join(os.path.dirname(self.opt.in_video), 'chat.json'), 'r', encoding='utf-8') as f:
+            chats = json.load(f)
+        chat_scores = np.zeros(shape=(len(frame_list)), dtype=np.float32)
+        for chat in tqdm(chats, 'Compute chat scores'):
+            chat_frame_index = min(int(chat['time'] * self.meta.fps + 0.5), self.meta.nframes - 1)
+            # logger.debug(f'{chat_frame_index}: {chat["text"]}')
+            chat_pdf = chat_pdfs[pdf_indexes[chat_frame_index]]
+            for i in range(max(chat_window[0], -chat_frame_index), min(chat_window[1], self.meta.nframes - chat_frame_index)):
+                chat_scores[chat_frame_index + i] += chat_pdf[i]
+        self.chat_scores = chat_scores
+
+        # max_index = np.argmax(chat_scores)
+        # logger.debug(f'chat_scores: {chat_scores.shape}, {chat_scores[max_index]}')
+        # cv.imshow(f'Highest chat score: frame {max_index}', frame_list[max_index])
+        # cv.waitKey(0)
+
         return info_list
 
     def debug_show_invalid(self):
