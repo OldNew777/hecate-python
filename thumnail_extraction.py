@@ -63,6 +63,7 @@ def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata
             for j in range(len(v_shot_range[i].v_range)):
                 v_valid_frm_idx.append(v_shot_range[i].v_range[j].v_idx[0])
                 v_valid_frm_shotlen.append(v_shot_range[i].v_range[j].length())
+        # logger.debug(f'v_valid_frm_idx: {len(v_valid_frm_idx)} {v_valid_frm_idx}')
 
         km_data = np.zeros(shape=(nfrm_valid, X.shape[1]), dtype=X.dtype)
         for i in range(len(v_valid_frm_idx)):
@@ -85,8 +86,11 @@ def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata
                 if func.mat_at(km_lbl, j) == v_srt_idx[km_k - 1 - i]:
                     mean_diff_j = func.mat_at(diff, v_valid_frm_idx[j])
                     if mean_diff_j < diff_min_val:
+                        diff_min_idx = j
                         diff_min_val = mean_diff_j
-                        diff_min_idx = v_valid_frm_idx[j]
+            # logger.debug(f'v_valid_frm_idx[diff_min_idx]')
+            # logger.debug(f'v_valid_frm_idx[{diff_min_idx}]')
+            # logger.debug(f'{v_valid_frm_idx[diff_min_idx]}')
             v_thumb_idx.append(v_valid_frm_idx[diff_min_idx])
 
     for i in range(len(v_thumb_idx)):
