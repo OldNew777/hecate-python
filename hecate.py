@@ -8,6 +8,7 @@ from mylogger import logger
 from video_parser import *
 
 from mylogger import logger
+from crawler import craw_bilibili
 
 
 def hecate(opt: config.HecateParams):

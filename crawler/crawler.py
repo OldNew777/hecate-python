@@ -9,8 +9,14 @@ import re
 from you_get import common
 from argparse import ArgumentParser
 
-import config
+from .config import get_headers
 from mylogger import logger
+
+
+default_output_dir = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'hecate-dataset'
+)
 
 
 def craw_cover_chat(bv: str, output_dir: os.path) -> None:
@@ -20,7 +26,7 @@ def craw_cover_chat(bv: str, output_dir: os.path) -> None:
     :return: None
     """
 
-    r = requests.get(url=f'https://www.ibilibili.com/video/{bv}', headers=config.get_headers())
+    r = requests.get(url=f'https://www.ibilibili.com/video/{bv}', headers=get_headers())
     soup = BeautifulSoup(r.text, 'lxml')
 
     def find_url(soup: BeautifulSoup, text: str) -> str:
@@ -34,7 +40,7 @@ def craw_cover_chat(bv: str, output_dir: os.path) -> None:
     cover_suffix = cover_url.split('.')[-1]
     cover_path = os.path.join(output_dir, f'cover.{cover_suffix}')
     if not os.path.exists(cover_path):
-        cover = requests.get(url=cover_url, headers=config.get_headers()).content
+        cover = requests.get(url=cover_url, headers=get_headers()).content
         with open(cover_path, 'wb') as f:
             f.write(cover)
 
@@ -42,7 +48,7 @@ def craw_cover_chat(bv: str, output_dir: os.path) -> None:
     chat_url = find_url(soup, '弹幕地址:')
     chat_path = os.path.join(output_dir, 'chat.json')
     if not os.path.exists(chat_path):
-        chat = requests.get(url=chat_url, headers=config.get_headers()).content
+        chat = requests.get(url=chat_url, headers=get_headers()).content
         soup = BeautifulSoup(chat, 'lxml', from_encoding='utf-8')
         chat_nodes = soup.find_all(name='d', recursive=True)
         chat_list = []
@@ -69,7 +75,7 @@ def check_dir(root_dir: os.path, name: str = None) -> os.path:
     return output_dir
 
 
-def craw_video(bv: str, output_root_dir: os.path, overwrite=False) -> None:
+def craw_video(bv: str, output_root_dir: os.path = default_output_dir, overwrite=False) -> None:
     output_dir = check_dir(output_root_dir, bv)
     video_path = os.path.join(output_dir, f'video.mp4')
 
@@ -94,7 +100,7 @@ def download_video_series(series_number: int, output_root_dir: os.path) -> None:
     temp_dir = check_dir(output_root_dir, 'temp')
 
     url = f'https://www.bilibili.com/bangumi/play/ss{series_number}'
-    r = requests.get(url=url, headers=config.get_headers())
+    r = requests.get(url=url, headers=get_headers())
     soup = BeautifulSoup(r.text, 'lxml')
 
     # with open(os.path.join(temp_dir, 'origin.html'), 'w', encoding='utf-8') as f:
@@ -155,7 +161,7 @@ def search(keyword: str, page: int, pagesize: int = 20, result_type: str = 'vide
         'order': 'dm',
     }
     r = requests.get(url='https://api.bilibili.com/x/web-interface/search/all/v2',
-                     params=param, headers=config.get_headers())
+                     params=param, headers=get_headers())
     data = r.json()
     for item in data['data']['result']:
         if item['result_type'] == result_type:
@@ -220,21 +226,17 @@ def craw_search(keyword: str, num: int, output_root_dir: os.path) -> None:
 
 
 def parse_args(args):
-    default_output_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        'hecate-dataset'
-    )
     parser = ArgumentParser(description='Craw Bilibili videos')
     parser.add_argument('--series', type=int, action='store', dest='series', default=None, help='Series number')
     parser.add_argument('--search', type=str, action='store', dest='search', default=None, help='Keyword for searching')
-    parser.add_argument('-n', '--num', type=int, action='store', dest='num', default=10, help='Number of videos to craw for searching')
+    parser.add_argument('--num', type=int, action='store', dest='num', default=10, help='Number of videos to craw for searching')
     parser.add_argument('-o', '--output_dir', type=str, action='store', dest='output_dir', default=str(default_output_dir), help='Output directory')
     parser.add_argument('--bv', type=str, action='store', dest='bv', default=None, help='Bilibili video id')
 
-    return parser.parse_args(args)
+    return parser.parse_known_args(args)[0]
 
 
-if __name__ == '__main__':
+def craw_bilibili(args):
     parser = parse_args(sys.argv[1:])
     check_dir(parser.output_dir)
 
@@ -246,3 +248,7 @@ if __name__ == '__main__':
         craw_search(keyword=parser.search, num=parser.num, output_root_dir=parser.output_dir)
     else:
         logger.info('No video specified, exit')
+
+
+if __name__ == '__main__':
+    craw_bilibili(sys.argv[1:])

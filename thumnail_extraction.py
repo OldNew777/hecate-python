@@ -24,13 +24,18 @@ def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata
         for j in range(len(v_shot_range[i].v_idx)):
             v_frm_valid[v_shot_range[i].v_idx[j]] = True
 
+    def score_func(index: int) -> float:
+        # return func.mat_at(diff, index)                                                 # stillness
+        # return (1.0 - chat_scores[index]) * opt.chat_alpha                              # chat
+        return func.mat_at(diff, index) + (1.0 - chat_scores[index]) * opt.chat_alpha   # stillness + chat
+
     nfrm_valid = sum(v_frm_valid)
     if nfrm_valid == 0:
         # If there's no valid frame, pick one most still/chat frame
         min_idx = -1
         min_val = sys.float_info.max
         for i in range(nfrm):
-            val = func.mat_at(diff, i) + (1.0 - chat_scores[i]) * opt.chat_alpha
+            val = score_func(i)
             if val < min_val:
                 min_val = val
                 min_idx = i
@@ -85,10 +90,10 @@ def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata
             min_val = sys.float_info.max
             for j in range(km_lbl.shape[0]):
                 if func.mat_at(km_lbl, j) == v_srt_idx[km_k - 1 - i]:
-                    mean_diff_j = func.mat_at(diff, v_valid_frm_idx[j]) + (1.0 - chat_scores[v_valid_frm_idx[j]]) * opt.chat_alpha
-                    if mean_diff_j < min_val:
+                    val = score_func(v_valid_frm_idx[j])
+                    if val < min_val:
                         min_idx = j
-                        min_val = mean_diff_j
+                        min_val = val
             # logger.debug(f'v_valid_frm_idx[min_idx]')
             # logger.debug(f'v_valid_frm_idx[{min_idx}]')
             # logger.debug(f'{v_valid_frm_idx[min_idx]}')
