@@ -468,7 +468,7 @@ class VideoParser:
                     diff_min_val = sys.float_info.max
                     for k in range(ssb0, ssb1 + 1):
                         diff_k = self.X_diff[k]
-                        if diff_k < diff_min_idx:
+                        if diff_k < diff_min_val:
                             diff_min_idx = k
                             diff_min_val = diff_k
                     
