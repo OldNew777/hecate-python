@@ -113,13 +113,17 @@ def calc_hsv_hist(img, nbins=128):
 def orientation(gx, gy):
     alpha = 180.0 / 3.14159265358979323846264338327950288419716939937510
 
-    ori = np.ndarray(gx.shape[0:2], np.float32)
-    for r in range(gx.shape[0]):
-        for c in range(gx.shape[1]):
-            deg = np.arctan2(gy[r, c], gx[r, c]) * alpha
-            deg = deg if deg >= 0 else deg + 360
-            deg = deg if deg < 180 else deg - 180
-            ori[r, c] = deg
+    # ori = np.zeros(gx.shape[0:2], dtype=np.float32)
+    # for r in range(gx.shape[0]):
+    #     for c in range(gx.shape[1]):
+    #         deg = np.arctan2(gy[r, c], gx[r, c]) * alpha
+    #         deg = deg if deg >= 0 else deg + 360
+    #         deg = deg if deg < 180 else deg - 180
+    #         ori[r, c] = deg
+
+    ori = np.arctan2(gy, gx) * alpha
+    ori[ori < 0] += 360
+    ori[ori >= 180] -= 180
 
     return ori
 
@@ -181,7 +185,7 @@ def calc_pyr_edge_hist(img, nbins_ori=16, nbins_mag=16, level=2):
 
     hist_sz = nbins_ori + nbins_mag
 
-    hist = np.ndarray([hist_sz * npatches, 1], np.float32)
+    hist = np.ndarray([hist_sz * npatches, 1], dtype=np.float32)
 
     patch = 0
     for l in range(level):
@@ -207,7 +211,7 @@ def calc_pyr_edge_hist_g(gx, gy, nbins_ori=16, nbins_mag=16, level=2):
 
     hist_sz = nbins_ori + nbins_mag
 
-    hist = np.ndarray([hist_sz * npatches, 1], np.float32)
+    hist = np.ndarray([hist_sz * npatches, 1], dtype=np.float32)
 
     patch = 0
     for l in range(level):
@@ -263,6 +267,7 @@ class VideoParser:
     def parse_video(self, opt: config.HecateParams):
         self.opt = opt
         self.init(opt.in_video)
+        self.frame_list = self.frame_list[0:1000]
         self.parse_frame_info()
         self.filter_low_quality()
         self.filter_transition()
@@ -384,8 +389,8 @@ class VideoParser:
             npatches += 4 ** i
 
         nbins_edge = nbins_edge_mag + nbins_edge_ori
-        color_hist = np.ndarray([npatches * 3 * nbins_color, len(frame_list)], dtype=np.float32)
-        edge_hist = np.ndarray([npatches * nbins_edge, len(frame_list)], dtype=np.float32)
+        color_hist = np.zeros([npatches * 3 * nbins_color, len(frame_list)], dtype=np.float32)
+        edge_hist = np.zeros([npatches * nbins_edge, len(frame_list)], dtype=np.float32)
 
         for i in tqdm(range(len(frame_list)), desc="Extracting histo features"):
             if omit_filtered and not info_list[i].valid:
@@ -448,6 +453,10 @@ class VideoParser:
                 v_idxmap[row] = i
                 row += 1
 
+        # print(km_data.shape)
+        # print(self.feature.shape)
+        # print(np.max(km_data))
+        # print(np.min(km_data))
         ncluster = min(nfrm_valid // 2, len(self.ranges))
         km_lbl, km_ctr = func.perform_kmeans(km_data, ncluster)
 
