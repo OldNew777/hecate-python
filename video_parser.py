@@ -48,6 +48,18 @@ class ShotRange(Range):
         return self.__str__()
 
 
+class FrameInfo:
+    def __init__(self, id, brightness, sharpness, uniformity):
+        self.id = id
+        self.brightness = brightness
+        self.sharpness = sharpness
+        self.uniformity = uniformity
+        self.valid = True
+        self.flag = ""
+
+    def __repr__(self):
+        return f"[{self.id}][{self.valid}] B: {self.brightness}, S: {self.sharpness}, U:{self.uniformity}, F: {self.flag}"
+
 def to_gray(bgr):
     gray = cv.cvtColor(bgr, cv.COLOR_BGR2GRAY)
     gray = cv.GaussianBlur(gray, (3, 3), 0)
@@ -286,19 +298,19 @@ class VideoParser:
     @func.time_it
     def filter_low_quality(self, max_filter_percentage=0.15, threshold=[0.075, 0.08, 0.8]):
         info_list = self.info_list
-        sort_brightness = sorted(info_list, key=lambda item: item["brightness"])
-        sort_sharpness = sorted(info_list, key=lambda item: item["sharpness"])
-        sort_uniformity = sorted(info_list, key=lambda item: -item["uniformity"])  # max to min
+        sort_brightness = sorted(info_list, key=lambda item: item.brightness)
+        sort_sharpness = sorted(info_list, key=lambda item: item.sharpness)
+        sort_uniformity = sorted(info_list, key=lambda item: -item.uniformity)  # max to min
         for i in range(int(len(info_list) * max_filter_percentage)):
-            if sort_brightness[i]["brightness"] < threshold[0]:
-                sort_brightness[i]["valid"] = False
-                sort_brightness[i]["flag"] += "DARK "
-            if sort_sharpness[i]["sharpness"] < threshold[1]:
-                sort_sharpness[i]["valid"] = False
-                sort_sharpness[i]["flag"] += "BLUR "
-            if sort_uniformity[i]["uniformity"] > threshold[2]:
-                sort_uniformity[i]["valid"] = False
-                sort_uniformity[i]["flag"] += "UNIFORM "
+            if sort_brightness[i].brightness < threshold[0]:
+                sort_brightness[i].valid = False
+                sort_brightness[i].flag += "DARK "
+            if sort_sharpness[i].sharpness < threshold[1]:
+                sort_sharpness[i].valid = False
+                sort_sharpness[i].flag += "BLUR "
+            if sort_uniformity[i].uniformity > threshold[2]:
+                sort_uniformity[i].valid = False
+                sort_uniformity[i].flag += "UNIFORM "
 
     @func.time_it
     def filter_transition(self, max_filter_percentage=0.1, threshold=[0.5, 0, 1]):
@@ -339,18 +351,18 @@ class VideoParser:
             v_ecr.append(max(rho_out, rho_in))
 
         # CUT detection
-        sorted_cut = sorted(info_list, key=lambda item: -v_diff[item["id"]])
+        sorted_cut = sorted(info_list, key=lambda item: -v_diff[item.id])
         for i in range(int(len(info_list) * max_filter_percentage)):
-            if v_diff[sorted_cut[i]["id"]] >= threshold[0]:
-                sorted_cut[i]["valid"] = False
-                sorted_cut[i]["flag"] += "CUT "
+            if v_diff[sorted_cut[i].id] >= threshold[0]:
+                sorted_cut[i].valid = False
+                sorted_cut[i].flag += "CUT "
 
         # TRANSITION detection (cut, fade, dissolve, wipe)
-        sorted_transition = sorted(info_list, key=lambda item: v_ecr[item["id"]])
+        sorted_transition = sorted(info_list, key=lambda item: v_ecr[item.id])
         for i in range(int(len(info_list) * max_filter_percentage)):
-            if v_ecr[sorted_transition[i]["id"]] >= threshold[1]:
-                sorted_transition[i]["valid"] = False
-                sorted_transition[i]["flag"] += "ECR "
+            if v_ecr[sorted_transition[i].id] >= threshold[1]:
+                sorted_transition[i].valid = False
+                sorted_transition[i].flag += "ECR "
 
         self.X_diff = np.array(v_diff).reshape([len(v_diff), 1])
         self.X_ecr = np.array(v_ecr).reshape([len(v_ecr), 1])
@@ -370,7 +382,7 @@ class VideoParser:
         edge_hist = np.ndarray([npatches * nbins_edge, len(frame_list)], dtype=np.float32)
 
         for i in tqdm(range(len(frame_list)), desc="Extracting histo features"):
-            if omit_filtered and not info_list[i]["valid"]:
+            if omit_filtered and not info_list[i].valid:
                 continue
 
             color_hist[:, i] = calc_pyr_color_hist(frame_list[i], nbins_color, pyr_level)[:, 0]
@@ -395,9 +407,9 @@ class VideoParser:
         max_shot_len = min_shot_len * 3
 
         for i in tqdm(range(len(frame_list)), desc="Post process"):
-            if start_idx < 0 and info_list[i]["valid"]:
+            if start_idx < 0 and info_list[i].valid:
                 start_idx = i
-            if start_idx >= 0 and (not info_list[i]["valid"] or i + 1 == len(frame_list)):
+            if start_idx >= 0 and (not info_list[i].valid or i + 1 == len(frame_list)):
                 end_idx = i
                 shotlen = end_idx - start_idx + 1
                 if shotlen >= max_shot_len:
@@ -406,8 +418,8 @@ class VideoParser:
                     jump = sbd_heuristic(v_diff, njumps, min_shot_len)
                     # logger.debug(start_idx, end_idx, jump)
                     for k in range(len(jump)):
-                        info_list[start_idx + jump[k] - 1]["valid"] = False
-                        info_list[start_idx + jump[k] - 1]["flag"] += "[GFL] "
+                        info_list[start_idx + jump[k] - 1].valid = False
+                        info_list[start_idx + jump[k] - 1].flag += "[GFL] "
 
                 start_idx = -1
                 end_idx = -1
@@ -418,19 +430,19 @@ class VideoParser:
         ranges = []
         sb0 = sb1 = -1
         for i in range(len(frame_list)):
-            if info_list[i]["valid"]:
+            if info_list[i].valid:
                 if sb0 < 0:
                     sb0 = i
                 sb1 = i
 
-            if sb0 >= 0 and sb1 >= 0 and (not info_list[i]["valid"] or i + 1 == len(frame_list)):
+            if sb0 >= 0 and sb1 >= 0 and (not info_list[i].valid or i + 1 == len(frame_list)):
                 # logger.debug(sb0, sb1)
                 if sb1 - sb0 + 1 > min_shot_len:
                     ranges.append(ShotRange(sb0, sb1))
                 else:
                     for j in range(sb0, sb1 + 1):
-                        info_list[j]["valid"] = False
-                        info_list[j]["flag"] += "SHORT "
+                        info_list[j].valid = False
+                        info_list[j].flag += "SHORT "
                 sb0 = sb1 = -1
         self.ranges = ranges
         return ranges
@@ -442,14 +454,12 @@ class VideoParser:
         for idx, bgr in enumerate(tqdm(frame_list, desc="Parse frame info")):
             gray = to_gray(bgr)
 
-            info = {
-                "id": idx,
-                "brightness": calc_brightness(bgr),
-                "sharpness": calc_sharpness(gray),
-                "uniformity": calc_uniformity(gray),
-                "valid": True,
-                "flag": "",
-            }
+            info = FrameInfo(
+                idx,
+                calc_brightness(bgr),
+                calc_sharpness(gray),
+                calc_uniformity(gray)
+            )
             # logger.debug(info)
 
             info_list.append(info)
@@ -460,26 +470,26 @@ class VideoParser:
         info_list = self.info_list
         frame_list = self.frame_list
         for item in info_list:
-            if not item["valid"]:
+            if not item.valid:
                 logger.debug(item)
-                cv.imshow(f"Invalid {item['id']}", frame_list[item["id"]])
+                cv.imshow(f"Invalid {item.id}", frame_list[item.id])
                 cv.waitKey()
 
     def debug_show_certain_invalid(self, key):
         info_list = self.info_list
         frame_list = self.frame_list
         for item in info_list:
-            if not item["valid"] and key in item["flag"]:
+            if not item.valid and key in item.flag:
                 logger.debug(item)
-                cv.imshow(f"Invalid {item['id']}", frame_list[item["id"]])
+                cv.imshow(f"Invalid {item.id}", frame_list[item.id])
                 cv.waitKey()
 
     def debug_show_valid(self):
         info_list = self.info_list
         frame_list = self.frame_list
         for item in info_list:
-            if item["valid"]:
+            if item.valid:
                 logger.debug(item)
-                cv.imshow(f"Valid {item['id']}", frame_list[item["id"]])
+                cv.imshow(f"Valid {item.id}", frame_list[item.id])
                 cv.waitKey()
 
