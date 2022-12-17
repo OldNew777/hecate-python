@@ -7,8 +7,6 @@ class HecateParams:
         optparser = ArgumentParser()
         optparser.add_argument('-f', '--video_file', action='store', dest='video_file', default='video.mp4',
                                help='Input video file')
-        optparser.add_argument('-s', '--step_sz', action='store', dest='step_sz', default=1,
-                               help='Step size for frame subsampling')
         optparser.add_argument('-n', '--njpg', action='store', dest='njpg', default=5,
                                help='Number of thumbnails to be generated')
         optparser.add_argument('--invalid_wnd', action='store', dest='invalid_wnd', default=0.15,
@@ -17,7 +15,6 @@ class HecateParams:
 
         self.video_file = os.path.relpath(opt.video_file)
         self.out_dir = os.path.dirname(self.video_file)
-        self.step_sz = int(opt.step_sz)
         self.njpg = int(opt.njpg)
         self.invalid_wnd = float(opt.invalid_wnd)
 

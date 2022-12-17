@@ -71,7 +71,7 @@ def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata
             km_data[i] = feature[v_valid_frm_idx[i]].copy()
 
         km_k = min(maxK, min(nfrm_valid, max(minK, opt.njpg)))
-        km_lbl, km_ctr = func.perform_kmeans(km_data, km_k, 5)
+        km_lbl, km_ctr = func.perform_kmeans(km_data, km_k, opt.njpg)
 
         clust_sz = [0] * km_k
         for i in range(km_lbl.shape[0]):
@@ -93,9 +93,6 @@ def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata
             # logger.debug(f'v_valid_frm_idx[{min_idx}]')
             # logger.debug(f'{v_valid_frm_idx[min_idx]}')
             v_thumb_idx.append(v_valid_frm_idx[min_idx])
-
-    for i in range(len(v_thumb_idx)):
-        v_thumb_idx[i] *= opt.step_sz
 
     return v_thumb_idx
 

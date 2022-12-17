@@ -1,3 +1,5 @@
+import sys
+
 import requests
 from bs4 import BeautifulSoup
 import json
@@ -5,6 +7,7 @@ import os
 import shutil
 import re
 from you_get import common
+from argparse import ArgumentParser
 
 import config
 from mylogger import logger
@@ -216,15 +219,30 @@ def craw_search(keyword: str, num: int, output_root_dir: os.path) -> None:
             json.dump(results, f, ensure_ascii=False, indent=4)
 
 
+def parse_args(args):
+    default_output_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        'hecate-dataset'
+    )
+    parser = ArgumentParser(description='Craw Bilibili videos')
+    parser.add_argument('--series', type=int, action='store', dest='series', default=None, help='Series number')
+    parser.add_argument('--search', type=str, action='store', dest='search', default=None, help='Keyword for searching')
+    parser.add_argument('-n', '--num', type=int, action='store', dest='num', default=10, help='Number of videos to craw for searching')
+    parser.add_argument('-o', '--output_dir', type=str, action='store', dest='output_dir', default=str(default_output_dir), help='Output directory')
+    parser.add_argument('--bv', type=str, action='store', dest='bv', default=None, help='Bilibili video id')
+
+    return parser.parse_args(args)
+
+
 if __name__ == '__main__':
-    output_root_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'hecate-dataset')
-    check_dir(output_root_dir)
+    parser = parse_args(sys.argv[1:])
+    check_dir(parser.output_dir)
 
-    craw_search(keyword='vlog', num=50, output_root_dir=output_root_dir)
-
-    # bv = 'BV138411L7Ze'
-    # craw_video(bv=bv, output_root_dir=output_root_dir)
-    #
-    # # not implemented
-    # series_number = 357
-    # download_video_series(series_number=series_number, output_root_dir=output_root_dir)
+    if parser.bv is not None:
+        craw_video(bv=parser.bv, output_root_dir=parser.output_dir)
+    elif parser.series is not None:
+        download_video_series(series_number=parser.series, output_root_dir=parser.output_dir)
+    elif parser.search is not None:
+        craw_search(keyword=parser.search, num=parser.num, output_root_dir=parser.output_dir)
+    else:
+        logger.info('No video specified, exit')
