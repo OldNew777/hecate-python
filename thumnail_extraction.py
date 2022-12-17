@@ -1,4 +1,5 @@
 import os.path
+import shutil
 
 import cv2
 import sys
@@ -6,6 +7,7 @@ import numpy as np
 
 import func
 import config
+from mylogger import logger
 
 
 @func.time_it
@@ -98,6 +100,9 @@ def generate_thumbnails(opt: config.HecateParams, v_thumb_idx: list) -> None:
     frame_index = 0
 
     out_dir = os.path.join(opt.out_dir, 'thumbnails')
+    if os.path.exists(out_dir):
+        shutil.rmtree(out_dir)
+    os.makedirs(out_dir)
 
     video = cv2.VideoCapture(opt.in_video)
     assert video.isOpened(), 'Cannot capture source'

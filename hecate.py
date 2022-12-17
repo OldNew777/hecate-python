@@ -18,6 +18,6 @@ if __name__ == '__main__':
     logger.debug(f'v_shot_range: {v_shot_range}')
 
     v_thumb_idx = thumnail_extraction.detect_thumbnail_frames(
-        opt=opt, meta=parser.meta, v_shot_range=v_shot_range, X=parser.X_ecr, diff=parser.X_diff)
+        opt=opt, meta=parser.meta, v_shot_range=v_shot_range, X=parser.feature, diff=parser.X_diff)
 
     thumnail_extraction.generate_thumbnails(opt=opt, v_thumb_idx=v_thumb_idx)
