@@ -261,7 +261,7 @@ class VideoParser:
         self.parse_frame_info()
         self.filter_low_quality()
         self.filter_transition()
-        # self.extract_histo_features()
+        self.extract_histo_features()
         self.post_process()
         self.update_shot_range(40)
         self.filter_redundant_and_obtain_subshots()
@@ -444,7 +444,7 @@ class VideoParser:
                 row += 1
 
         ncluster = min(len(nfrm_valid) // 2, len(self.ranges))
-        km_lbl, km_ctr = perform_kmeans(km_data, ncluster)
+        km_lbl, km_ctr = func.perform_kmeans(km_data, ncluster)
 
         v_frm_clusterid = -np.ones(len(self.frame_list))
         for i in range(km_lbl.shape[0]):
