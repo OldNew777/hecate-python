@@ -267,7 +267,7 @@ class VideoParser:
     def parse_video(self, opt: config.HecateParams):
         self.opt = opt
         self.init(opt.in_video)
-        self.frame_list = self.frame_list[0:1000]
+        # self.frame_list = self.frame_list[0:1000]
         self.parse_frame_info()
         self.filter_low_quality()
         self.filter_transition()
@@ -567,3 +567,11 @@ class VideoParser:
                 logger.debug(item)
                 cv.imshow(f"Valid {item.id}", frame_list[item.id])
                 cv.waitKey()
+
+    def debug_show_ranges(self):
+        for sr in self.ranges:
+            for idx in sr.v_idx:
+                logger.debug(self.info_list[idx])
+                cv.imshow(f"Range selected {idx}", self.frame_list[idx])
+                cv.waitKey()
+                cv.destroyWindow(f"Range selected {idx}")
