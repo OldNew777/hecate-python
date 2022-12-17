@@ -430,11 +430,11 @@ class VideoParser:
     def filter_redundant_and_obtain_subshots(self):
         valid_frame = [item for id, item in enumerate(self.frame_list) if self.info_list[id].valid]
         nfrm_valid = len(valid_frame)
-        if len(nfrm_valid) == 0:
+        if nfrm_valid == 0:
             return
 
-        km_data = np.ndarray([len(nfrm_valid), self.feature.shape[1]], dtype=self.feature.dtype)
-        v_idxmap = np.zeros([len(nfrm_valid)], dtype=int)
+        km_data = np.ndarray([nfrm_valid, self.feature.shape[1]], dtype=self.feature.dtype)
+        v_idxmap = np.zeros([nfrm_valid], dtype=int)
 
         row = 0
         for i in range(len(self.frame_list)):
@@ -443,7 +443,7 @@ class VideoParser:
                 v_idxmap[row] = i
                 row += 1
 
-        ncluster = min(len(nfrm_valid) // 2, len(self.ranges))
+        ncluster = min(nfrm_valid // 2, len(self.ranges))
         km_lbl, km_ctr = func.perform_kmeans(km_data, ncluster)
 
         v_frm_clusterid = -np.ones(len(self.frame_list))
