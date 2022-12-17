@@ -11,7 +11,7 @@ def time_it(func):
         start = time.time()
         result = func(*args, **kwargs)
         end = time.time()
-        logger.info(f"Time taken by {func.__name__} is {end - start} seconds")
+        logger.info(f"Time taken by {func.__name__} is {end - start:.04f} seconds")
         return result
     return wrapper
 

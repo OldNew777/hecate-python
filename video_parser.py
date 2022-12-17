@@ -58,8 +58,12 @@ class FrameInfo:
         self.valid = True
         self.flag = ""
 
+    def __str__(self):
+        return self.__repr__()
+
     def __repr__(self):
         return f"[{self.id}][{self.valid}] B: {self.brightness}, S: {self.sharpness}, U:{self.uniformity}, F: {self.flag}"
+
 
 def to_gray(bgr):
     gray = cv.cvtColor(bgr, cv.COLOR_BGR2GRAY)
@@ -255,6 +259,7 @@ class VideoParser:
         self.X_diff = None
         self.meta = None
 
+    @func.time_it
     def parse_video(self, opt: config.HecateParams):
         self.opt = opt
         self.init(opt.in_video)
@@ -387,13 +392,14 @@ class VideoParser:
                 continue
 
             color_hist[:, i] = calc_pyr_color_hist(frame_list[i], nbins_color, pyr_level)[:, 0]
-            edge_hist[:, i] = calc_pyr_edge_hist(to_gray(frame_list[i]), nbins_edge_ori, nbins_edge_mag, pyr_level)[:,
-                              0]
+            edge_hist[:, i] = calc_pyr_edge_hist(
+                to_gray(frame_list[i]), nbins_edge_ori, nbins_edge_mag, pyr_level)[:, 0]
 
         color_hist = color_hist.T
         edge_hist = edge_hist.T
 
         self.feature = np.concatenate([color_hist, edge_hist], axis=1)
+        logger.info(f"Feature shape: {self.feature.shape}")
         return self.feature
 
     @func.time_it
@@ -470,7 +476,7 @@ class VideoParser:
                         if diff_k < diff_min_val:
                             diff_min_idx = k
                             diff_min_val = diff_k
-                    
+
                     r = Range(ssb0, ssb1)
                     r.v_idx.append(diff_min_idx)
                     self.ranges[shotid].v_idx.append(diff_min_idx)
@@ -483,7 +489,6 @@ class VideoParser:
 
                     ssb0 = ssb1 = lbl = -1
             sb0 = sb1 = -1
-        
 
     def update_shot_range(self, min_shot_len):
         frame_list = self.frame_list
@@ -553,4 +558,3 @@ class VideoParser:
                 logger.debug(item)
                 cv.imshow(f"Valid {item.id}", frame_list[item.id])
                 cv.waitKey()
-
