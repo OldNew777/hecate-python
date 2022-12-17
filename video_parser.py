@@ -271,8 +271,7 @@ class VideoParser:
     @func.time_it
     def init(self, path):
         video = cv.VideoCapture(path)
-        if not video.isOpened():
-            return None
+        assert video.isOpened(), 'Cannot capture source'
 
         logger.info(f'OpenCV version: {cv.__version__}')
         (major_ver, minor_ver, subminor_ver) = (cv.__version__).split('.')

@@ -1,3 +1,5 @@
+import os.path
+
 import cv2
 import sys
 import numpy as np
@@ -91,5 +93,27 @@ def detect_thumbnail_frames(opt: config.HecateParams, meta: config.VideoMetadata
     return v_thumb_idx
 
 
-def generate_thumbnails(opt, v_thumb_idx: list) -> None:
-    pass
+def generate_thumbnails(opt: config.HecateParams, v_thumb_idx: list) -> None:
+    njpg_count = 0
+    frame_index = 0
+
+    out_dir = os.path.join(opt.out_dir, 'thumbnails')
+
+    video = cv2.VideoCapture(opt.in_video)
+    assert video.isOpened(), 'Cannot capture source'
+    while njpg_count < len(v_thumb_idx):
+        ret, frame = video.read()
+        if not ret:
+            break
+        rank = -1
+        for i in range(len(v_thumb_idx)):
+            if frame_index == v_thumb_idx[i]:
+                rank = i
+                break
+        if 0 <= rank < opt.njpg:
+            cv2.imwrite(os.path.join(out_dir, f'{rank}.jpg'), frame)
+            njpg_count += 1
+        if njpg_count >= opt.njpg:
+            break
+        frame_index += 1
+    video.release()
