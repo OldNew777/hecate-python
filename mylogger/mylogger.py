@@ -17,12 +17,48 @@ def clear_log_file() -> bool:
 log_format = '[%(asctime)s] [%(levelname)s] %(message)s'
 date_format = '%Y-%m-%d %H:%M:%S'
 formatter = logging.Formatter(fmt=log_format, datefmt=date_format)
+file_handler = logging.FileHandler(log_file, mode='a')
 
 logging.basicConfig(level=logging.DEBUG, format=log_format, datefmt=date_format)
 
-logger = logging.getLogger(__file__)
-
-file_handler = logging.FileHandler(log_file)
+logger_instance = logging.getLogger(__name__)
+logger_instance.setLevel(logging.DEBUG)
 file_handler.setFormatter(formatter)
-file_handler.setLevel(logging.DEBUG)
-logger.addHandler(file_handler)
+logger_instance.addHandler(file_handler)
+
+
+class MyLogger:
+    @classmethod
+    def debug(cls, *msg):
+        logger_instance.debug(' '.join([str(m) for m in msg]))
+
+    @classmethod
+    def info(cls, *msg):
+        logger_instance.info(' '.join([str(m) for m in msg]))
+
+    @classmethod
+    def warning(cls, *msg):
+        logger_instance.warning(' '.join([str(m) for m in msg]))
+
+    warn = warning
+
+    @classmethod
+    def error(cls, *msg):
+        logger_instance.error(' '.join([str(m) for m in msg]))
+
+    @classmethod
+    def critical(cls, *msg):
+        logger_instance.critical(' '.join([str(m) for m in msg]))
+
+    fatal = critical
+
+    @classmethod
+    def exception(cls, *msg):
+        logger_instance.exception(' '.join([str(m) for m in msg]))
+
+    @classmethod
+    def log(cls, level, *msg):
+        logger_instance.log(level, ' '.join([str(m) for m in msg]))
+
+
+logger = MyLogger
