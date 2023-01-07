@@ -60,5 +60,9 @@ class MyLogger:
     def log(cls, level, *msg):
         logger_instance.log(level, ' '.join([str(m) for m in msg]))
 
+    @classmethod
+    def setLevel(cls, level):
+        logger_instance.setLevel(level)
+
 
 logger = MyLogger

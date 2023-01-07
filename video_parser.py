@@ -271,7 +271,10 @@ class VideoParser:
     def parse_video(self, opt: config.HecateParams):
         self.opt = opt
         self.init(opt.video_file)
-        # self.frame_list = self.frame_list[0:1000]
+        # frame_len = len(self.frame_list)
+        # if frame_len > 20000:
+        #     logger.warning("More than 20000 frames, only first 20000 frames will be kept.")
+        #     self.frame_list = self.frame_list[0:20000]
         self.parse_frame_info()
         self.filter_low_quality()
         self.filter_transition()
