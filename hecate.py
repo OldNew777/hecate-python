@@ -27,6 +27,6 @@ def hecate(opt: config.HecateParams):
 
 
 if __name__ == '__main__':
-    logger.setLevel('DEBUG')
+    logger.setLevel('INFO')
     opt = config.HecateParams(sys.argv[1:])
     hecate(opt)
